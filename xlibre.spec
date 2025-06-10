@@ -1,4 +1,4 @@
-%define git 0
+%define git 20250611
 
 %global optflags %{optflags} -O3
 
@@ -22,28 +22,24 @@
 
 # ABI versions.  Have to keep these manually in sync with the source
 # because rpm is a terrible language.  HTFU.
-%define ansic_major 0
+%define ansic_major 1
 %define ansic_minor 4
-%define videodrv_major 25
-%define videodrv_minor 2
-%define xinput_major 24
-%define xinput_minor 4
-%define extension_major 10
+%define videodrv_major 28
+%define videodrv_minor 0
+%define xinput_major 26
+%define xinput_minor 0
+%define extension_major 11
 %define extension_minor 0
 
-Name:		x11-server
-Version:	21.1.16
-%if %{git}
-Release:	0.%{git}1
-%else
+Name:		xlibre
+Version:	21.1.17%{?git:~%{git}}
 Release:	1
-%endif
-Summary:	X11 servers
+Summary:	X11 server
 Group:		System/X11
 License:	GPLv2+ and MIT
 URL:		https://xorg.freedesktop.org
 %if %{git}
-Source0:	xorg-server-%{git}.tar.bz2
+Source0:	https://github.com/X11Libre/xserver/archive/refs/heads/master.tar.gz#/xlibre-%{git}.tar.gz
 %else
 Source0:	http://xorg.freedesktop.org/releases/individual/xserver/xorg-server-%{version}.tar.xz
 %endif
@@ -83,13 +79,13 @@ Patch10000:	0001-Fedora-hack-Make-the-suid-root-wrapper-always-start-.patch
 
 # OpenMandriva/Mageia patches
 # git format-patch --start-number 900 mdv-1.6.4-redhat..mdv-1.6.4-patches
-Patch900:	0900-Use-a-X-wrapper-that-uses-pam-and-consolehelper-to-g.patch
+#Patch900:	0900-Use-a-X-wrapper-that-uses-pam-and-consolehelper-to-g.patch
 Patch901:	0901-Don-t-print-information-about-X-Server-being-a-pre-r.patch
 Patch902:	0902-Take-width-into-account-when-choosing-default-mode.patch
 Patch903:	0903-LED-behavior-fixes.patch
-Patch906:	0906-xfree86-need-to-press-Ctrl-Alt-Bksp-twice-to-termina.patch
+#Patch906:	0906-xfree86-need-to-press-Ctrl-Alt-Bksp-twice-to-termina.patch
 Patch907:	0907-Add-nr-argument-for-backwards-compatibility.patch
-Patch910:	xorg-1.13.0-link-tirpc.patch
+#Patch910:	xorg-1.13.0-link-tirpc.patch
 Patch911:	xorg-server-1.16.0-blacklist-driver.patch
 
 # Candidates for dropping:
@@ -187,8 +183,10 @@ BuildRequires:	pkgconfig(libtirpc) >= 0.2.0
 BuildRequires:	pkgconfig(glib-2.0)
 BuildRequires:	hostname
 
+%rename x11-server-xorg
+
 %description
-X11 servers.
+X11 server
 
 #------------------------------------------------------------------------------
 
@@ -205,6 +203,8 @@ Requires:	pkgconfig(dri)
 Requires:	pkgconfig(xfont2)
 Obsoletes:	libglamor-devel < 0.6.0-10
 
+%rename x11-server-devel
+
 %description devel
 Development files for %{name}.
 
@@ -214,6 +214,7 @@ if [ -h %{_includedir}/X11 ]; then
 fi
 
 %files devel
+%doc %{_docdir}/xorg-server/Xserver-DTrace.*
 %dir %{_includedir}/xorg
 %{_bindir}/xserver-sdk-abi-requires
 %{_includedir}/xorg/*.h
@@ -250,6 +251,8 @@ Provides:	xserver-abi(ansic-%{ansic_major}) = %{ansic_minor}
 Provides:	xserver-abi(videodrv-%{videodrv_major}) = %{videodrv_minor}
 Provides:	xserver-abi(xinput-%{xinput_major}) = %{xinput_minor}
 Provides:	xserver-abi(extension-%{extension_major}) = %{extension_minor}
+
+%rename x11-server-common
 
 %description common
 X server common files.
@@ -292,7 +295,7 @@ fi
 Summary:	X.org X11 server
 Group:		System/X11
 License:	MIT
-Requires:	x11-server-common = %{version}-%{release}
+Requires:	%{name}-common = %{version}-%{release}
 Requires:	x11-data-xkbdata > 1.3-5
 Requires:	x11-font-alias
 Requires:	libx11-common
@@ -323,7 +326,8 @@ x11-server-xorg is the new generation of X server from X.Org.
 Summary:	A nested X server
 Group:		System/X11
 License:	MIT
-Requires:	x11-server-common = %{version}-%{release}
+Requires:	%{name}-common = %{version}-%{release}
+%rename x11-server-xnest
 
 %description xnest
 Xnest is an X Window System server which runs in an X window.
@@ -347,9 +351,10 @@ Summary:	X virtual framebuffer server
 Group:		System/X11
 # xvfb-run is GPLv2, rest is MIT
 License:	MIT and GPLv2
-Requires:	x11-server-common = %{version}-%{release}
+Requires:	%{name}-common = %{version}-%{release}
 Requires:	xauth
 Requires:	util-linux
+%rename x11-server-xvfb
 
 %description xvfb
 Xvfb (X Virtual Frame Buffer) is an X Windows System server
@@ -379,7 +384,7 @@ install Xvfb for that purpose.
 Summary:	KDrive Xephyr X server
 Group:		System/X11
 License:	MIT
-Requires:	x11-server-common = %{version}-%{release}
+Requires:	%{name}-common = %{version}-%{release}
 
 %description xephyr
 KDrive (formerly known as TinyX) is a light-weight X server targetting specific
@@ -423,12 +428,7 @@ Xserver source code needed to build unofficial servers, like Xvnc.
 #------------------------------------------------------------------------------
 
 %prep
-%if %{git}
-%setup -q -n xorg-server-%{git}
-%else
-%setup -q -n xorg-server-%{version}
-%endif
-%autopatch -p1
+%autosetup -p1 -n xserver-%{?git:master}%{!?git:%{version}}
 
 # check the ABI in the source against what we expect.
 getmajor() {
@@ -498,7 +498,7 @@ mkdir -p %{buildroot}%{_sysconfdir}/X11/fontpath.d
 mkdir -p %{buildroot}%{_prefix}/X11R6/lib/
 ln -s ../../%{_lib}/X11 %{buildroot}%{_prefix}/X11R6/lib/X11
 
-# create more module directories to be owned by x11-server-common
+# create more module directories to be owned by %{name}-common
 install -d -m755 %{buildroot}%{_libdir}/xorg/modules/{input,drivers}
 
 # (anssi) manage proprietary drivers
