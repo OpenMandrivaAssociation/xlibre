@@ -2,7 +2,7 @@
 
 %global optflags %{optflags} -O3
 
-%bcond_with builddocs
+%bcond_without builddocs
 
 # /usr/lib/rpm/brp-python-bytecompile /usr/bin/python 1
 # Error compiling '/builddir/build/BUILDROOT/x11-server-1.20.0-1.x86_64/usr/share/x11-server-source/config/fdi2iclass.py'...
@@ -177,7 +177,7 @@ BuildRequires:	doxygen
 #BuildRequires:	fop
 BuildRequires:	lynx
 BuildRequires:	xmlto
-BuildRequires:	x11-sgml-doctools >= 1.8
+BuildRequires:	pkgconfig(xorg-sgml-doctools)
 %endif
 BuildRequires:	pkgconfig(libtirpc) >= 0.2.0
 BuildRequires:	pkgconfig(glib-2.0)
