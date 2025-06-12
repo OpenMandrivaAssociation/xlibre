@@ -33,7 +33,7 @@
 
 Name:		xlibre
 Version:	21.1.17%{?git:~%{git}}
-Release:	1
+Release:	2
 Summary:	X11 server
 Group:		System/X11
 License:	GPLv2+ and MIT
@@ -182,6 +182,7 @@ BuildRequires:	pkgconfig(xorg-sgml-doctools)
 BuildRequires:	pkgconfig(libtirpc) >= 0.2.0
 BuildRequires:	pkgconfig(glib-2.0)
 BuildRequires:	hostname
+Provides:	x11-server = %{EVRD}
 
 %rename x11-server-xorg
 
