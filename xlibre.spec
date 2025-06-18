@@ -1,4 +1,4 @@
-%define git 20250611
+%define git 20250618
 
 %global optflags %{optflags} -O3
 
@@ -33,7 +33,7 @@
 
 Name:		xlibre
 Version:	21.1.17%{?git:~%{git}}
-Release:	2
+Release:	1
 Summary:	X11 server
 Group:		System/X11
 License:	GPLv2+ and MIT
