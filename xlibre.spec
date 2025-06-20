@@ -1,4 +1,4 @@
-%define git 20250618
+%define git 20250620
 
 %global optflags %{optflags} -O3
 
