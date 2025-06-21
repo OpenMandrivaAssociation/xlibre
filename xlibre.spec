@@ -1,4 +1,4 @@
-%define git 20250620
+#define git 20250620
 
 %global optflags %{optflags} -O3
 
@@ -32,16 +32,16 @@
 %define extension_minor 0
 
 Name:		xlibre
-Version:	21.1.17%{?git:~%{git}}
+Version:	25.0.0.0%{?git:~%{git}}
 Release:	1
 Summary:	X11 server
 Group:		System/X11
 License:	GPLv2+ and MIT
 URL:		https://xorg.freedesktop.org
-%if %{git}
+%if 0%{?git:1}
 Source0:	https://github.com/X11Libre/xserver/archive/refs/heads/master.tar.gz#/xlibre-%{git}.tar.gz
 %else
-Source0:	http://xorg.freedesktop.org/releases/individual/xserver/xorg-server-%{version}.tar.xz
+Source0:	https://github.com/X11Libre/xserver/archive/refs/tags/xlibre-xserver-%{version}.tar.gz
 %endif
 Source1:	xserver.pamd
 Source2:	xvfb-run.sh
@@ -429,7 +429,7 @@ Xserver source code needed to build unofficial servers, like Xvnc.
 #------------------------------------------------------------------------------
 
 %prep
-%autosetup -p1 -n xserver-%{?git:master}%{!?git:%{version}}
+%autosetup -p1 -n %{!?git:xserver-xlibre-}xserver-%{?git:master}%{!?git:%{version}}
 
 # check the ABI in the source against what we expect.
 getmajor() {
