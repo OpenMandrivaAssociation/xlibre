@@ -33,7 +33,7 @@
 
 Name:		xlibre
 Version:	25.0.0.0%{?git:~%{git}}
-Release:	1
+Release:	2
 Summary:	X11 server
 Group:		System/X11
 License:	GPLv2+ and MIT
@@ -74,11 +74,9 @@ Patch7023:	0001-xfree86-use-modesetting-driver-by-default-on-GeForce.patch
 #Patch7031:	0003-modesetting-Factor-out-drmmode_target_output.patch
 #Patch7032:	0004-modesetting-Use-atomic-instead-of-per-crtc-walks-whe.patch
 
-# because the display-managers are not ready yet, do not upstream
-Patch10000:	0001-Fedora-hack-Make-the-suid-root-wrapper-always-start-.patch
-
 # OpenMandriva/Mageia patches
 # git format-patch --start-number 900 mdv-1.6.4-redhat..mdv-1.6.4-patches
+# 0900 is a potential replacement for hw/xfree86/xorg-wrapper.c
 #Patch900:	0900-Use-a-X-wrapper-that-uses-pam-and-consolehelper-to-g.patch
 Patch901:	0901-Don-t-print-information-about-X-Server-being-a-pre-r.patch
 Patch902:	0902-Take-width-into-account-when-choosing-default-mode.patch
@@ -238,12 +236,6 @@ Requires:	x11-data-xkbdata
 Requires:	xkbcomp
 Requires:	udev
 Requires:	mkcomposecache
-Requires(post):	chkconfig >= 1.9.0
-Requires(postun):	chkconfig
-# nvidia-71xx does not support X.org server >= 1.5
-Conflicts:	x11-driver-video-nvidia71xx < 71.86.09-2
-# old fglrx does not support X.org server >= 1.7
-Conflicts:	x11-driver-video-fglrx < 8.720
 Obsoletes:	%{_lib}glamor0 <= 0.6.0-10
 Obsoletes:	x11-driver-video-modesetting < 2:0.9.1
 Provides:	x11-driver-video-modesetting = 2:0.9.1
@@ -258,26 +250,17 @@ Provides:	xserver-abi(extension-%{extension_major}) = %{extension_minor}
 %description common
 X server common files.
 
-%post common
-%{_sbindir}/update-alternatives \
-	--install %{_sysconfdir}/ld.so.conf.d/GL.conf gl_conf %{_sysconfdir}/ld.so.conf.d/GL/standard.conf %{priority}
-
-%postun common
-if [ ! -f %{_sysconfdir}/ld.so.conf.d/GL/standard.conf ]; then
-    /usr/sbin/update-alternatives --remove gl_conf %{_sysconfdir}/ld.so.conf.d/GL/standard.conf
-fi
-
 %files common
 %dir %{_libdir}/xorg/modules
 %dir %{_sysconfdir}/X11
 %dir %{_sysconfdir}/X11/app-defaults
 %dir %{_sysconfdir}/X11/fontpath.d
-%dir %{_sysconfdir}/ld.so.conf.d/GL
 %dir %{_sysconfdir}/X11/xorg.conf.d
 %config(noreplace) %{_sysconfdir}/X11/xorg.conf.d/90-zap.conf
 %config(noreplace) %{_sysconfdir}/X11/xorg.conf.d/50-synaptics.conf
-%ghost %{_sysconfdir}/ld.so.conf.d/GL.conf
-%{_sysconfdir}/ld.so.conf.d/GL/standard.conf
+# Intentionally not noreplace, so we can get rid of needs_root_rights
+# when the display managers make progress
+%config %{_sysconfdir}/X11/Xwrapper.config
 %{_bindir}/gtf
 %{_libdir}/xorg/modules/*
 %{_libdir}/xorg/protocol.txt
@@ -502,14 +485,6 @@ ln -s ../../%{_lib}/X11 %{buildroot}%{_prefix}/X11R6/lib/X11
 # create more module directories to be owned by %{name}-common
 install -d -m755 %{buildroot}%{_libdir}/xorg/modules/{input,drivers}
 
-# (anssi) manage proprietary drivers
-install -d -m755 %{buildroot}%{_sysconfdir}/ld.so.conf.d/GL
-cat > %{buildroot}%{_sysconfdir}/ld.so.conf.d/GL/standard.conf << EOF
-# This file is knowingly empty since the libraries are in standard search
-# path. Please do not remove this file.
-EOF
-touch %{buildroot}%{_sysconfdir}/ld.so.conf.d/GL.conf
-
 install -m 0755 %{SOURCE2} %{buildroot}%{_bindir}/xvfb-run
 install -m 0644 %{SOURCE3} %{buildroot}%{_datadir}/X11/xorg.conf.d/
 install -m 755 %{SOURCE30} %{buildroot}%{_bindir}
@@ -524,5 +499,11 @@ install -c -m 644 %{SOURCE8} %{buildroot}%{_sysconfdir}/X11/xorg.conf.d/
 install -d %{buildroot}/%{xserver_source_dir}
 rm -rf build
 cp -r * %{buildroot}/%{xserver_source_dir}
+
+mkdir -p %{buildroot}%{_sysconfdir}/X11
+cat >%{buildroot}%{_sysconfdir}/X11/Xwrapper.config <<'EOF'
+allowed_users = console
+needs_root_rights = yes
+EOF
 
 %files
