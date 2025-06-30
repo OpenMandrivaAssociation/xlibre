@@ -32,7 +32,7 @@
 %define extension_minor 0
 
 Name:		xlibre
-Version:	25.0.0.1%{?git:~%{git}}
+Version:	25.0.0.2%{?git:~%{git}}
 Release:	1
 Summary:	X11 server
 Group:		System/X11
@@ -113,8 +113,6 @@ Requires:	%{name}-xvfb
 Obsoletes:	%{name}-xvnc < %{version}-%{release}
 Obsoletes:	%{name}-xfake < %{version}-%{release}
 
-# FIXME: build with systemtap installed is broken
-BuildConflicts:	systemtap
 BuildRequires:	pkgconfig(dbus-1)
 %ifarch %{ix86} %{x86_64}
 BuildRequires:	pkgconfig(libunwind)
