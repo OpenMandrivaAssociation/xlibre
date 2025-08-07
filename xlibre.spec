@@ -433,6 +433,8 @@ test $(getmajor extension) == %{extension_major}
 test $(getminor extension) == %{extension_minor}
 
 %build
+export CC=gcc
+export CXX=g++
 %meson \
 	-Dlog_dir="%{_logdir}" \
 	-Dmodule_dir="%{_libdir}/xorg/modules" \
