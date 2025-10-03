@@ -1,0 +1,1144 @@
+From 12136906eb7be1bb336ff61e89f3e9af1cc8ce3f Mon Sep 17 00:00:00 2001
+From: stefan11111 <stefan11111@shitposting.expert>
+Date: Tue, 19 Aug 2025 22:19:25 +0300
+Subject: [PATCH 1/6] modesetting: Initialize the cursor image with the
+ smallest size supported by all CRTCs.
+
+Signed-off-by: stefan11111 <stefan11111@shitposting.expert>
+---
+ hw/xfree86/drivers/video/modesetting/driver.c |  7 +--
+ hw/xfree86/drivers/video/modesetting/driver.h |  3 +
+ .../video/modesetting/drmmode_display.c       | 55 ++++++-------------
+ .../video/modesetting/drmmode_display.h       |  3 -
+ 4 files changed, 21 insertions(+), 47 deletions(-)
+
+diff --git a/hw/xfree86/drivers/video/modesetting/driver.c b/hw/xfree86/drivers/video/modesetting/driver.c
+index d944be8aac..f820a7576f 100644
+--- a/hw/xfree86/drivers/video/modesetting/driver.c
++++ b/hw/xfree86/drivers/video/modesetting/driver.c
+@@ -1959,14 +1959,9 @@ ScreenInit(ScreenPtr pScreen, int argc, char **argv)
+         PointPriv->spriteFuncs = &drmmode_sprite_funcs;
+     }
+ 
+-    /* Get the maximum cursor size. */
+-    drmmode_cursor_dim_rec cursor_dim = { 0 };
+-    if (!drmmode_get_largest_cursor(pScrn, &cursor_dim))
+-        return FALSE;
+-
+     /* Need to extend HWcursor support to handle mask interleave */
+     if (!ms->drmmode.sw_cursor)
+-        xf86_cursors_init(pScreen, cursor_dim.width, cursor_dim.height,
++        xf86_cursors_init(pScreen, ms->cursor_image_width, ms->cursor_image_height,
+                           HARDWARE_CURSOR_SOURCE_MASK_INTERLEAVE_64 |
+                           HARDWARE_CURSOR_UPDATE_UNHIDDEN |
+                           HARDWARE_CURSOR_ARGB);
+diff --git a/hw/xfree86/drivers/video/modesetting/driver.h b/hw/xfree86/drivers/video/modesetting/driver.h
+index e69bce8cd2..cb0469f20a 100644
+--- a/hw/xfree86/drivers/video/modesetting/driver.h
++++ b/hw/xfree86/drivers/video/modesetting/driver.h
+@@ -131,6 +131,9 @@ typedef struct _modesettingRec {
+     DamagePtr damage;
+     Bool dirty_enabled;
+ 
++    uint32_t cursor_image_width;
++    uint32_t cursor_image_height;
++
+     Bool has_queue_sequence;
+     Bool tried_queue_sequence;
+ 
+diff --git a/hw/xfree86/drivers/video/modesetting/drmmode_display.c b/hw/xfree86/drivers/video/modesetting/drmmode_display.c
+index 7d0e3b7ae1..df9d46ffd8 100644
+--- a/hw/xfree86/drivers/video/modesetting/drmmode_display.c
++++ b/hw/xfree86/drivers/video/modesetting/drmmode_display.c
+@@ -1908,18 +1908,6 @@ drmmode_paint_cursor(CARD32 * restrict cursor, int cursor_pitch, int cursor_widt
+ 
+ static void drmmode_hide_cursor(xf86CrtcPtr crtc);
+ 
+-static inline int
+-get_maximum_cursor_width(drmmode_cursor_rec cursor)
+-{
+-    return cursor.dimensions[cursor.num_dimensions - 1].width;
+-}
+-
+-static inline int
+-get_maximum_cursor_height(drmmode_cursor_rec cursor)
+-{
+-    return cursor.dimensions[cursor.num_dimensions - 1].height;
+-}
+-
+ /*
+  * The load_cursor_argb_check driver hook.
+  *
+@@ -1931,14 +1919,15 @@ static Bool
+ drmmode_load_cursor_argb_check(xf86CrtcPtr crtc, CARD32 *image)
+ {
+     drmmode_crtc_private_ptr drmmode_crtc = crtc->driver_private;
++    modesettingPtr ms = modesettingPTR(crtc->scrn);
+     CursorPtr cursor = xf86CurrentCursor(crtc->scrn->pScreen);
+     drmmode_cursor_rec drmmode_cursor = drmmode_crtc->cursor;
+     int width, height, i;
+     int max_width, max_height;
+ 
+-    /* We need to know what our limit is for HW cursors. */
+-    max_width  = get_maximum_cursor_width(drmmode_cursor);
+-    max_height = get_maximum_cursor_height(drmmode_cursor);
++    /* We need to know what our limit is for HW cursors.*/
++    max_width  = ms->cursor_image_width;
++    max_height = ms->cursor_image_height;
+ 
+     /* Find the most compatiable size. */
+     for (i = 0; i < drmmode_cursor.num_dimensions; i++)
+@@ -4652,6 +4641,9 @@ drmmode_uevent_fini(ScrnInfoPtr scrn, drmmode_ptr drmmode)
+ #endif
+ }
+ 
++static void
++drmmode_get_smallest_supported_cursor(ScrnInfoPtr pScrn, uint32_t *owidth, uint32_t *oheight);
++
+ /* create front and cursor BOs */
+ Bool
+ drmmode_create_initial_bos(ScrnInfoPtr pScrn, drmmode_ptr drmmode)
+@@ -4673,20 +4665,12 @@ drmmode_create_initial_bos(ScrnInfoPtr pScrn, drmmode_ptr drmmode)
+ 
+     bpp = 32;
+ 
++    drmmode_get_smallest_supported_cursor(pScrn, &ms->cursor_image_width, &ms->cursor_image_height);
++
+     for (i = 0; i < xf86_config->num_crtc; i++) {
+         xf86CrtcPtr crtc = xf86_config->crtc[i];
+         drmmode_crtc_private_ptr drmmode_crtc = crtc->driver_private;
+-        drmmode_cursor_rec cursor = drmmode_crtc->cursor;
+-        
+-        /* If we don't have any dimensions then 
+-         * something has gone terribly wrong. */
+-        assert(cursor.num_dimensions);
+-
+-        /* Use the maximum available size. */
+-        width  = get_maximum_cursor_width(cursor);
+-        height = get_maximum_cursor_height(cursor);
+-
+-        drmmode_crtc->cursor.bo = dumb_bo_create(drmmode->fd, width, height, bpp);
++        drmmode_crtc->cursor.bo = dumb_bo_create(drmmode->fd, ms->cursor_image_width, ms->cursor_image_height, bpp);
+     }
+ 
+     return TRUE;
+@@ -4823,26 +4807,22 @@ drmmode_crtc_set_vrr(xf86CrtcPtr crtc, Bool enabled)
+         drmmode_crtc->vrr_enabled = enabled;
+ }
+ 
+-Bool drmmode_get_largest_cursor(ScrnInfoPtr pScrn, drmmode_cursor_dim_ptr cursor_lim)
++static void
++drmmode_get_smallest_supported_cursor(ScrnInfoPtr pScrn, uint32_t *owidth, uint32_t *oheight)
+ {
+     xf86CrtcConfigPtr xf86_config = XF86_CRTC_CONFIG_PTR(pScrn);
+ 
+     /* We need the cursor image to be at least 64x64 */
+     int max_width = 64, max_height = 64;
+ 
+-    if (!cursor_lim)
+-        return FALSE;
+-
+     for (int i = 0; i < xf86_config->num_crtc; i++) {
+         xf86CrtcPtr crtc = xf86_config->crtc[i];
+         drmmode_crtc_private_ptr drmmode_crtc = crtc->driver_private;
+         drmmode_cursor_rec cursor = drmmode_crtc->cursor;
+ 
+-        /* Get the largest cursor available. */
+-        drmmode_cursor_dim_rec largest = cursor.dimensions[cursor.num_dimensions - 1];
+-
+-        int width  = largest.width;
+-        int height = largest.height;
++        /* Get the smallest cursor available. */
++        int width  = cursor.dimensions[0].width;
++        int height = cursor.dimensions[0].height;
+ 
+         /* Future work:
+          * - We should only let sizes that all CRTCs support. */
+@@ -4850,9 +4830,8 @@ Bool drmmode_get_largest_cursor(ScrnInfoPtr pScrn, drmmode_cursor_dim_ptr cursor
+         max_height = MAX(height, max_height);
+     }
+ 
+-    cursor_lim->width  = max_width;
+-    cursor_lim->height = max_height;
+-    return TRUE;
++    *owidth = max_size.width;
++    *oheight = max_size.height;
+ }
+ 
+ /*
+diff --git a/hw/xfree86/drivers/video/modesetting/drmmode_display.h b/hw/xfree86/drivers/video/modesetting/drmmode_display.h
+index 618211ffad..de1b61d7e3 100644
+--- a/hw/xfree86/drivers/video/modesetting/drmmode_display.h
++++ b/hw/xfree86/drivers/video/modesetting/drmmode_display.h
+@@ -359,7 +359,4 @@ Bool drmmode_crtc_get_fb_id(xf86CrtcPtr crtc, uint32_t *fb_id, int *x, int *y);
+ 
+ void drmmode_set_dpms(ScrnInfoPtr scrn, int PowerManagementMode, int flags);
+ void drmmode_crtc_set_vrr(xf86CrtcPtr crtc, Bool enabled);
+-
+-Bool drmmode_get_largest_cursor(ScrnInfoPtr pScrn, drmmode_cursor_dim_ptr cursor_lim);
+-
+ #endif
+
+From 88a4ffa0730654128f01a77ba026b58bdbda1969 Mon Sep 17 00:00:00 2001
+From: stefan11111 <stefan11111@shitposting.expert>
+Date: Thu, 21 Aug 2025 14:22:23 +0300
+Subject: [PATCH 2/6] modesetting: add "FallbackCursor" option
+
+On many cards, SIZE_HINTS isn't implemented, so the hardware cursor used
+is the fallback one.
+
+With this, we allow the user to specify what size the hardware cursor should have,
+instead of forcing 64x64.
+
+Signed-off-by: stefan11111 <stefan11111@shitposting.expert>
+---
+ hw/xfree86/drivers/video/modesetting/driver.c |  1 +
+ hw/xfree86/drivers/video/modesetting/driver.h |  1 +
+ .../video/modesetting/drmmode_display.c       | 79 ++++++++++++++-----
+ .../drivers/video/modesetting/modesetting.man |  4 +
+ 4 files changed, 64 insertions(+), 21 deletions(-)
+
+diff --git a/hw/xfree86/drivers/video/modesetting/driver.c b/hw/xfree86/drivers/video/modesetting/driver.c
+index f820a7576f..4de7adb2bb 100644
+--- a/hw/xfree86/drivers/video/modesetting/driver.c
++++ b/hw/xfree86/drivers/video/modesetting/driver.c
+@@ -138,6 +138,7 @@ static SymTabRec Chipsets[] = {
+ 
+ static const OptionInfoRec Options[] = {
+     {OPTION_SW_CURSOR, "SWcursor", OPTV_BOOLEAN, {0}, FALSE},
++    {OPTION_FALLBACK_CURSOR, "FallbackCursor", OPTV_STRING, {0}, FALSE},
+     {OPTION_DEVICE_PATH, "kmsdev", OPTV_STRING, {0}, FALSE},
+     {OPTION_SHADOW_FB, "ShadowFB", OPTV_BOOLEAN, {0}, FALSE},
+     {OPTION_ACCEL_METHOD, "AccelMethod", OPTV_STRING, {0}, FALSE},
+diff --git a/hw/xfree86/drivers/video/modesetting/driver.h b/hw/xfree86/drivers/video/modesetting/driver.h
+index cb0469f20a..b23101037d 100644
+--- a/hw/xfree86/drivers/video/modesetting/driver.h
++++ b/hw/xfree86/drivers/video/modesetting/driver.h
+@@ -54,6 +54,7 @@ struct ms_vrr_priv {
+ 
+ typedef enum {
+     OPTION_SW_CURSOR,
++    OPTION_FALLBACK_CURSOR,
+     OPTION_DEVICE_PATH,
+     OPTION_SHADOW_FB,
+     OPTION_ACCEL_METHOD,
+diff --git a/hw/xfree86/drivers/video/modesetting/drmmode_display.c b/hw/xfree86/drivers/video/modesetting/drmmode_display.c
+index df9d46ffd8..de2656e24d 100644
+--- a/hw/xfree86/drivers/video/modesetting/drmmode_display.c
++++ b/hw/xfree86/drivers/video/modesetting/drmmode_display.c
+@@ -2793,8 +2793,63 @@ drmmode_crtc_vrr_init(int drm_fd, xf86CrtcPtr crtc)
+     drmModeFreeObjectProperties(drm_props);
+ }
+ 
++static drmmode_cursor_dim_rec
++drmmode_cursor_get_fallback(drmmode_ptr drmmode)
++{
++    drmmode_cursor_dim_rec fallback;
++
++    const char *fallback_cursor_str = xf86GetOptValString(drmmode->Options,
++                                                          OPTION_FALLBACK_CURSOR);
++
++    char *height;
++
++    if (!fallback_cursor_str) {
++        goto kms_default;
++    }
++
++    errno = 0;
++    fallback.width = strtol(fallback_cursor_str, &height, 10);
++    if (errno || fallback.width == 0) {
++        goto kms_default;
++    }
++
++    if (*height == '\0') {
++        /* we have a width, but don't have a height */
++        fallback.height = fallback.width;
++        return fallback;
++    }
++
++    fallback.height = strtol(height + 1, NULL, 10);
++    if (errno || fallback.height == 0) {
++        goto kms_default;
++    }
++
++    return fallback;
++kms_default:
++    /* This is the safest fallback value as
++     * it is the default value that KMS uses.  */
++    fallback = (drmmode_cursor_dim_rec){
++        .width  = 64,
++        .height = 64,
++    };
++
++#if 0 /* We could instead use the largest possible cursor, but that uses more power */
++    ret = drmGetCap(drmmode->fd, DRM_CAP_CURSOR_WIDTH, &value);
++    if (!ret) {
++        fallback.width = value;
++    }
++
++    ret = drmGetCap(drmmode->fd, DRM_CAP_CURSOR_HEIGHT, &value);
++    if (!ret) {
++        fallback.height = value;
++    }
++#endif
++
++    return fallback;
++}
++
+ static unsigned int
+-drmmode_crtc_init(ScrnInfoPtr pScrn, drmmode_ptr drmmode, drmModeResPtr mode_res, drmmode_cursor_dim_rec fallback, int num)
++drmmode_crtc_init(ScrnInfoPtr pScrn, drmmode_ptr drmmode, drmModeResPtr mode_res, int num)
+ {
+     xf86CrtcPtr crtc;
+     drmmode_crtc_private_ptr drmmode_crtc;
+@@ -2825,8 +2880,7 @@ drmmode_crtc_init(ScrnInfoPtr pScrn, drmmode_ptr drmmode, drmModeResPtr mode_res
+     drmmode_crtc->cursor.num_dimensions = 1;
+     drmmode_crtc->cursor.dimensions = xnfalloc(sizeof(drmmode_cursor_dim_rec));
+ 
+-    drmmode_crtc->cursor.dimensions[0].width = fallback.width;
+-    drmmode_crtc->cursor.dimensions[0].height = fallback.height;
++    drmmode_crtc->cursor.dimensions[0] = drmmode_cursor_get_fallback(drmmode);
+ 
+     props = drmModeObjectGetProperties(drmmode->fd, mode_res->crtcs[num],
+                                        DRM_MODE_OBJECT_CRTC);
+@@ -4151,29 +4205,12 @@ drmmode_pre_init(ScrnInfoPtr pScrn, drmmode_ptr drmmode, int cpp)
+     xf86DrvMsgVerb(pScrn->scrnIndex, X_INFO, MS_LOGLEVEL_DEBUG,
+                    "Up to %d crtcs needed for screen.\n", crtcs_needed);
+ 
+-    /* This is the safest fallback value as
+-     * it is the default value that KMS uses.  */
+-    drmmode_cursor_dim_rec fallback = {
+-        .width  = 64,
+-        .height = 64,
+-    };
+-
+-    ret = drmGetCap(drmmode->fd, DRM_CAP_CURSOR_WIDTH, &value);
+-    if (!ret) {
+-        fallback.width = value;
+-    }
+-
+-    ret = drmGetCap(drmmode->fd, DRM_CAP_CURSOR_HEIGHT, &value);
+-    if (!ret) {
+-        fallback.height = value;
+-    }
+-
+     xf86CrtcSetSizeRange(pScrn, 320, 200, mode_res->max_width,
+                          mode_res->max_height);
+     for (i = 0; i < mode_res->count_crtcs; i++)
+         if (!xf86IsEntityShared(pScrn->entityList[0]) ||
+             (crtcs_needed && !(ms_ent->assigned_crtcs & (1 << i))))
+-            crtcs_needed -= drmmode_crtc_init(pScrn, drmmode, mode_res, fallback, i);
++            crtcs_needed -= drmmode_crtc_init(pScrn, drmmode, mode_res, i);
+ 
+     /* All ZaphodHeads outputs provided with matching crtcs? */
+     if (xf86IsEntityShared(pScrn->entityList[0]) && (crtcs_needed > 0))
+diff --git a/hw/xfree86/drivers/video/modesetting/modesetting.man b/hw/xfree86/drivers/video/modesetting/modesetting.man
+index 26212725c4..b1fd291ad2 100644
+--- a/hw/xfree86/drivers/video/modesetting/modesetting.man
++++ b/hw/xfree86/drivers/video/modesetting/modesetting.man
+@@ -49,6 +49,10 @@ are supported:
+ Selects software cursor.  The default is
+ .B off.
+ .TP
++.BI "Option \*qFallbackCursor\*q \*q" string \*q
++The size of the cursor to use if SIZE_HINTS isn't available.
++The default is "64x64".
++.TP
+ .BI "Option \*qkmsdev\*q \*q" string \*q
+ The framebuffer device to use. Default: /dev/dri/card0.
+ .TP
+
+From 71ae1a43d88bbd4029a50e7fcee290b54ff519d9 Mon Sep 17 00:00:00 2001
+From: stefan11111 <stefan11111@shitposting.expert>
+Date: Thu, 21 Aug 2025 21:21:50 +0300
+Subject: [PATCH 3/6] modesetting: probe using the old method is SIZE_HINTS
+ isn't available
+
+On most cards, SIZE_HINTS isn't available.
+Without this, most users would have to set the fallback cursor size themselves,
+or rely on the 64x64 default.
+
+Signed-off-by: stefan11111 <stefan11111@shitposting.expert>
+---
+ .../video/modesetting/drmmode_display.c       | 127 ++++++++++++++++--
+ .../video/modesetting/drmmode_display.h       |   3 +-
+ 2 files changed, 115 insertions(+), 15 deletions(-)
+
+diff --git a/hw/xfree86/drivers/video/modesetting/drmmode_display.c b/hw/xfree86/drivers/video/modesetting/drmmode_display.c
+index de2656e24d..c9c3a7048c 100644
+--- a/hw/xfree86/drivers/video/modesetting/drmmode_display.c
++++ b/hw/xfree86/drivers/video/modesetting/drmmode_display.c
+@@ -1907,6 +1907,7 @@ drmmode_paint_cursor(CARD32 * restrict cursor, int cursor_pitch, int cursor_widt
+ }
+ 
+ static void drmmode_hide_cursor(xf86CrtcPtr crtc);
++static void drmmode_probe_cursor_size(xf86CrtcPtr crtc);
+ 
+ /*
+  * The load_cursor_argb_check driver hook.
+@@ -1929,6 +1930,13 @@ drmmode_load_cursor_argb_check(xf86CrtcPtr crtc, CARD32 *image)
+     max_width  = ms->cursor_image_width;
+     max_height = ms->cursor_image_height;
+ 
++    if (drmmode_crtc->cursor_up) {
++        /* we probe the cursor so late, because we want to make sure that
++           the screen is fully initialized and something is already drawn on it.
++           Otherwise, we can't get reliable results with the probe. */
++        drmmode_probe_cursor_size(crtc);
++    }
++
+     /* Find the most compatiable size. */
+     for (i = 0; i < drmmode_cursor.num_dimensions; i++)
+     {
+@@ -2494,6 +2502,8 @@ populate_cursor_sizes(drmmode_ptr drmmode, drmmode_crtc_private_ptr drmmode_crtc
+         drmmode_crtc->cursor.dimensions[idx].width = size_hint.width;
+         drmmode_crtc->cursor.dimensions[idx].height = size_hint.height;
+     }
++
++    drmmode_crtc->cursor_probed = TRUE;
+ fail:
+     drmModeFreePropertyBlob(blob);
+ }
+@@ -2826,24 +2836,19 @@ drmmode_cursor_get_fallback(drmmode_ptr drmmode)
+ 
+     return fallback;
+ kms_default:
+-    /* This is the safest fallback value as
+-     * it is the default value that KMS uses.  */
+-    fallback = (drmmode_cursor_dim_rec){
+-        .width  = 64,
+-        .height = 64,
+-    };
++    /* 64x64 is the safest fallback value to use when we can't probe in any other way,
++     * as it is the default value that KMS uses.  */
++
++    int ret;
++    uint64_t value = 0;
+ 
+-#if 0 /* We could instead use the largest possible cursor, but that uses more power */
++    /* We begin by using the largest supported cursor, and change it later,
++       when we can reliably probe for the smallest suppored cursor size */
+     ret = drmGetCap(drmmode->fd, DRM_CAP_CURSOR_WIDTH, &value);
+-    if (!ret) {
+-        fallback.width = value;
+-    }
++    fallback.width = ret ? 64 : value;
+ 
+     ret = drmGetCap(drmmode->fd, DRM_CAP_CURSOR_HEIGHT, &value);
+-    if (!ret) {
+-        fallback.height = value;
+-    }
+-#endif
++    fallback.height = ret ? 64 : value;
+ 
+     return fallback;
+ }
+@@ -4678,6 +4683,100 @@ drmmode_uevent_fini(ScrnInfoPtr scrn, drmmode_ptr drmmode)
+ #endif
+ }
+ 
++static inline void
++drmmode_reset_cursor(drmmode_crtc_private_ptr drmmode_crtc)
++{
++    /* Mark the entire cursor buffer as dirty */
++    drmmode_crtc->cursor_glyph_width = 0;
++    drmmode_crtc->cursor_glyph_height = 0;
++
++    /* If we had any cursor pitches for the old cursor, they are no longer valid now */
++    free(drmmode_crtc->cursor_pitches);
++    drmmode_crtc->cursor_pitches = NULL;
++}
++
++/*
++ * This is the old probe method for the minimum cursor size.
++ * This is only used if the SIZE_HINTS probe fails.
++ */
++static void drmmode_probe_cursor_size(xf86CrtcPtr crtc)
++{
++    drmmode_crtc_private_ptr drmmode_crtc = crtc->driver_private;
++    uint32_t handle = drmmode_crtc->cursor.bo->handle;
++    drmmode_ptr drmmode = drmmode_crtc->drmmode;
++    drmmode_cursor_ptr drmmode_cursor = &drmmode_crtc->cursor;
++    int width, height, size;
++    int max_width, max_height;
++    int min_width, min_height;
++
++    if (drmmode_crtc->cursor_probed) {
++        return;
++    }
++
++    drmmode_crtc->cursor_probed = TRUE;
++
++    xf86DrvMsg(crtc->scrn->scrnIndex, X_WARNING,
++               "Probing the cursor size using the old method\n");
++
++    /* If we're here, we only have one size, the fallback size */
++    max_width = drmmode_cursor->dimensions[0].width;
++    max_height = drmmode_cursor->dimensions[0].height;
++
++    min_width = max_width;
++    min_height = max_height;
++
++    /* probe square min first */
++    for (size = 1; size <= max_width &&
++             size <= max_height; size *= 2) {
++        int ret;
++
++        ret = drmModeSetCursor2(drmmode->fd, drmmode_crtc->mode_crtc->crtc_id,
++                                handle, size, size, 0, 0);
++        if (ret == 0) {
++            min_width = size;
++            min_height = size;
++            break;
++        }
++    }
++
++    /* check if smaller width works with non-square */
++    for (width = 1; width <= size; width *= 2) {
++        int ret;
++
++        ret = drmModeSetCursor2(drmmode->fd, drmmode_crtc->mode_crtc->crtc_id,
++                                handle, width, size, 0, 0);
++        if (ret == 0) {
++            min_width = width;
++            break;
++        }
++    }
++
++    /* check if smaller height works with non-square */
++    for (height = 1; height <= size; height *= 2) {
++        int ret;
++
++        ret = drmModeSetCursor2(drmmode->fd, drmmode_crtc->mode_crtc->crtc_id,
++                                handle, size, height, 0, 0);
++        if (ret == 0) {
++            min_height = height;
++            break;
++        }
++    }
++
++    drmModeSetCursor2(drmmode->fd, drmmode_crtc->mode_crtc->crtc_id, 0, 0, 0, 0, 0);
++
++    if (min_width != max_width || min_height != max_height) {
++        drmmode_reset_cursor(drmmode_crtc);
++    }
++
++    drmmode_cursor->dimensions[0].width = min_width;
++    drmmode_cursor->dimensions[0].height = min_height;
++
++    xf86DrvMsgVerb(crtc->scrn->scrnIndex, X_INFO, MS_LOGLEVEL_DEBUG,
++                   "Cursor size: %dx%d\n",
++                   min_width, min_height);
++}
++
+ static void
+ drmmode_get_smallest_supported_cursor(ScrnInfoPtr pScrn, uint32_t *owidth, uint32_t *oheight);
+ 
+diff --git a/hw/xfree86/drivers/video/modesetting/drmmode_display.h b/hw/xfree86/drivers/video/modesetting/drmmode_display.h
+index de1b61d7e3..4f7086db3c 100644
+--- a/hw/xfree86/drivers/video/modesetting/drmmode_display.h
++++ b/hw/xfree86/drivers/video/modesetting/drmmode_display.h
+@@ -246,9 +246,10 @@ typedef struct {
+     Bool vrr_enabled;
+     Bool use_gamma_lut;
+ 
+-    int* cursor_pitches;
+     uint32_t cursor_glyph_width;
+     uint32_t cursor_glyph_height;
++    int* cursor_pitches;
++    Bool cursor_probed;
+ } drmmode_crtc_private_rec, *drmmode_crtc_private_ptr;
+ 
+ typedef struct {
+
+From 8301647dc95f48f2f5065b9a523beaf5eeae5354 Mon Sep 17 00:00:00 2001
+From: stefan11111 <stefan11111@shitposting.expert>
+Date: Thu, 21 Aug 2025 21:44:08 +0300
+Subject: [PATCH 4/6] modesetting: rename OPTION_FALLBACK_CURSOR to
+ OPTION_CURSOR_SIZE
+
+Now that we probe for the cursor size automatically, even if
+SIZE_HINTS isn't available, it isn't very useful to set the
+size of the fallback cursor.
+
+However, it might still be useful to force a particular cursor
+size via xorg.conf.
+For example, if on a system the probes fail, or if the user wants
+a particular cursor size, that is higher that the minimum size.
+
+Signed-off-by: stefan11111 <stefan11111@shitposting.expert>
+---
+ hw/xfree86/drivers/video/modesetting/driver.c |  2 +-
+ hw/xfree86/drivers/video/modesetting/driver.h |  2 +-
+ .../video/modesetting/drmmode_display.c       | 19 +++++++++++++------
+ .../drivers/video/modesetting/modesetting.man | 12 +++++++++---
+ 4 files changed, 24 insertions(+), 11 deletions(-)
+
+diff --git a/hw/xfree86/drivers/video/modesetting/driver.c b/hw/xfree86/drivers/video/modesetting/driver.c
+index 4de7adb2bb..5c0d073944 100644
+--- a/hw/xfree86/drivers/video/modesetting/driver.c
++++ b/hw/xfree86/drivers/video/modesetting/driver.c
+@@ -138,7 +138,7 @@ static SymTabRec Chipsets[] = {
+ 
+ static const OptionInfoRec Options[] = {
+     {OPTION_SW_CURSOR, "SWcursor", OPTV_BOOLEAN, {0}, FALSE},
+-    {OPTION_FALLBACK_CURSOR, "FallbackCursor", OPTV_STRING, {0}, FALSE},
++    {OPTION_CURSOR_SIZE, "CursorSize", OPTV_STRING, {0}, FALSE},
+     {OPTION_DEVICE_PATH, "kmsdev", OPTV_STRING, {0}, FALSE},
+     {OPTION_SHADOW_FB, "ShadowFB", OPTV_BOOLEAN, {0}, FALSE},
+     {OPTION_ACCEL_METHOD, "AccelMethod", OPTV_STRING, {0}, FALSE},
+diff --git a/hw/xfree86/drivers/video/modesetting/driver.h b/hw/xfree86/drivers/video/modesetting/driver.h
+index b23101037d..0a24aa940c 100644
+--- a/hw/xfree86/drivers/video/modesetting/driver.h
++++ b/hw/xfree86/drivers/video/modesetting/driver.h
+@@ -54,7 +54,7 @@ struct ms_vrr_priv {
+ 
+ typedef enum {
+     OPTION_SW_CURSOR,
+-    OPTION_FALLBACK_CURSOR,
++    OPTION_CURSOR_SIZE,
+     OPTION_DEVICE_PATH,
+     OPTION_SHADOW_FB,
+     OPTION_ACCEL_METHOD,
+diff --git a/hw/xfree86/drivers/video/modesetting/drmmode_display.c b/hw/xfree86/drivers/video/modesetting/drmmode_display.c
+index c9c3a7048c..ea9fc4bdb4 100644
+--- a/hw/xfree86/drivers/video/modesetting/drmmode_display.c
++++ b/hw/xfree86/drivers/video/modesetting/drmmode_display.c
+@@ -2518,6 +2518,10 @@ drmmode_crtc_probe_size_hint(xf86CrtcPtr crtc, int num)
+     drmModePlane *kplane = NULL;
+     uint32_t i, type;
+ 
++    if (drmmode_crtc->cursor_probed) {
++        return;
++    }
++
+     static drmmode_prop_enum_info_rec plane_type_enums[] = {
+         [DRMMODE_PLANE_TYPE_PRIMARY] = {
+             .name = "Primary",
+@@ -2804,21 +2808,22 @@ drmmode_crtc_vrr_init(int drm_fd, xf86CrtcPtr crtc)
+ }
+ 
+ static drmmode_cursor_dim_rec
+-drmmode_cursor_get_fallback(drmmode_ptr drmmode)
++drmmode_cursor_get_fallback(drmmode_crtc_private_ptr drmmode_crtc)
+ {
++    drmmode_ptr drmmode = drmmode_crtc->drmmode;
+     drmmode_cursor_dim_rec fallback;
+ 
+-    const char *fallback_cursor_str = xf86GetOptValString(drmmode->Options,
+-                                                          OPTION_FALLBACK_CURSOR);
++    const char *cursor_size_str = xf86GetOptValString(drmmode->Options,
++                                                      OPTION_CURSOR_SIZE);
+ 
+     char *height;
+ 
+-    if (!fallback_cursor_str) {
++    if (!cursor_size_str) {
+         goto kms_default;
+     }
+ 
+     errno = 0;
+-    fallback.width = strtol(fallback_cursor_str, &height, 10);
++    fallback.width = strtol(cursor_size_str, &height, 10);
+     if (errno || fallback.width == 0) {
+         goto kms_default;
+     }
+@@ -2826,6 +2831,7 @@ drmmode_cursor_get_fallback(drmmode_ptr drmmode)
+     if (*height == '\0') {
+         /* we have a width, but don't have a height */
+         fallback.height = fallback.width;
++        drmmode_crtc->cursor_probed = TRUE;
+         return fallback;
+     }
+ 
+@@ -2834,6 +2840,7 @@ drmmode_cursor_get_fallback(drmmode_ptr drmmode)
+         goto kms_default;
+     }
+ 
++    drmmode_crtc->cursor_probed = TRUE;
+     return fallback;
+ kms_default:
+     /* 64x64 is the safest fallback value to use when we can't probe in any other way,
+@@ -2885,7 +2892,7 @@ drmmode_crtc_init(ScrnInfoPtr pScrn, drmmode_ptr drmmode, drmModeResPtr mode_res
+     drmmode_crtc->cursor.num_dimensions = 1;
+     drmmode_crtc->cursor.dimensions = xnfalloc(sizeof(drmmode_cursor_dim_rec));
+ 
+-    drmmode_crtc->cursor.dimensions[0] = drmmode_cursor_get_fallback(drmmode);
++    drmmode_crtc->cursor.dimensions[0] = drmmode_cursor_get_fallback(drmmode_crtc);
+ 
+     props = drmModeObjectGetProperties(drmmode->fd, mode_res->crtcs[num],
+                                        DRM_MODE_OBJECT_CRTC);
+diff --git a/hw/xfree86/drivers/video/modesetting/modesetting.man b/hw/xfree86/drivers/video/modesetting/modesetting.man
+index b1fd291ad2..f358ecdb6b 100644
+--- a/hw/xfree86/drivers/video/modesetting/modesetting.man
++++ b/hw/xfree86/drivers/video/modesetting/modesetting.man
+@@ -49,9 +49,15 @@ are supported:
+ Selects software cursor.  The default is
+ .B off.
+ .TP
+-.BI "Option \*qFallbackCursor\*q \*q" string \*q
+-The size of the cursor to use if SIZE_HINTS isn't available.
+-The default is "64x64".
++.BI "Option \*qCursorSize\*q \*q" string \*q
++The size of the cursor.
++By default we use various probes to determine what cursor size to use.
++If for some reason these probes don't work, or you just want to use
++a different size, use this option.
++The value is passed as either "<width>x<height>", or "<one number for square size>"
++
++Note: On failure (for example the hardware doesn't support the chosen size)
++the X server silently falls back to software cursor.
+ .TP
+ .BI "Option \*qkmsdev\*q \*q" string \*q
+ The framebuffer device to use. Default: /dev/dri/card0.
+
+From 6f0f4e1fee2b40e980e61109507cc8ee34706e2f Mon Sep 17 00:00:00 2001
+From: stefan11111 <stefan11111@shitposting.expert>
+Date: Fri, 22 Aug 2025 20:22:44 +0300
+Subject: [PATCH 5/6] modesetting: add support for gbm cursor buffers
+
+We first try to allocate a gbm buffer for the hw cursor.
+If that fails, we fall back to dumb buffers.
+
+Signed-off-by: stefan11111 <stefan11111@shitposting.expert>
+---
+ .../video/modesetting/drmmode_display.c       | 155 ++++++++++++------
+ .../video/modesetting/drmmode_display.h       |   5 +-
+ 2 files changed, 109 insertions(+), 51 deletions(-)
+
+diff --git a/hw/xfree86/drivers/video/modesetting/drmmode_display.c b/hw/xfree86/drivers/video/modesetting/drmmode_display.c
+index ea9fc4bdb4..7fe982143f 100644
+--- a/hw/xfree86/drivers/video/modesetting/drmmode_display.c
++++ b/hw/xfree86/drivers/video/modesetting/drmmode_display.c
+@@ -988,7 +988,7 @@ drmmode_crtc_flip(xf86CrtcPtr crtc, uint32_t fb_id, int x, int y,
+                            fb_id, flags, data);
+ }
+ 
+-int
++void
+ drmmode_bo_destroy(drmmode_ptr drmmode, drmmode_bo *bo)
+ {
+     int ret;
+@@ -997,6 +997,7 @@ drmmode_bo_destroy(drmmode_ptr drmmode, drmmode_bo *bo)
+     if (bo->gbm) {
+         gbm_bo_destroy(bo->gbm);
+         bo->gbm = NULL;
++        return;
+     }
+ #endif
+ 
+@@ -1005,8 +1006,6 @@ drmmode_bo_destroy(drmmode_ptr drmmode, drmmode_bo *bo)
+         if (ret == 0)
+             bo->dumb = NULL;
+     }
+-
+-    return 0;
+ }
+ 
+ uint32_t
+@@ -1043,23 +1042,41 @@ drmmode_bo_get_handle(drmmode_bo *bo)
+ }
+ 
+ static void *
+-drmmode_bo_map(drmmode_ptr drmmode, drmmode_bo *bo)
++drmmode_bo_map(drmmode_ptr drmmode, drmmode_bo *bo, Bool map_glamor)
+ {
+     int ret;
+ 
++    if (bo->map)
++        return bo->map;
++
+ #ifdef GLAMOR_HAS_GBM
+-    if (bo->gbm)
+-        return NULL;
++    if (bo->gbm) {
++        if (!map_glamor) {
++            return FALSE;
++        }
++        void *map_data = NULL;
++        uint32_t stride = 0;
++
++        int width = bo->width;
++        int height = bo->height;
++
++        bo->map = gbm_bo_map(bo->gbm, 0, 0, width, height,
++                             GBM_BO_TRANSFER_WRITE, /* We only need to write to the buffer */
++                             &stride, &map_data);
++
++        /* If we have a gbm bo, we don't fall back to dumb here */
++        return bo->map;
++    }
+ #endif
+ 
+-    if (bo->dumb->ptr)
+-        return bo->dumb->ptr;
+ 
+     ret = dumb_bo_map(drmmode->fd, bo->dumb);
+     if (ret)
+         return NULL;
+ 
+-    return bo->dumb->ptr;
++    bo->map = bo->dumb->ptr;
++
++    return bo->map;
+ }
+ 
+ int
+@@ -1108,6 +1125,27 @@ drmmode_bo_import(drmmode_ptr drmmode, drmmode_bo *bo,
+                         drmmode_bo_get_handle(bo), fb_id);
+ }
+ 
++/*
++ * Similar to the one in glamor/glamor_egl.c,
++ * but with a different default case
++ */
++static inline uint32_t
++gbm_format_for_depth(int depth)
++{
++    switch (depth) {
++    case 15:
++        return GBM_FORMAT_ARGB1555;
++    case 16:
++        return GBM_FORMAT_RGB565;
++    case 24:
++        return GBM_FORMAT_XRGB8888;
++    case 30:
++        return GBM_FORMAT_ARGB2101010;
++    default:
++        return GBM_FORMAT_ARGB8888;
++    }
++}
++
+ static Bool
+ drmmode_create_bo(drmmode_ptr drmmode, drmmode_bo *bo,
+                   unsigned width, unsigned height, unsigned bpp)
+@@ -1121,22 +1159,7 @@ drmmode_create_bo(drmmode_ptr drmmode, drmmode_bo *bo,
+         uint32_t num_modifiers;
+         uint64_t *modifiers = NULL;
+ #endif
+-        uint32_t format;
+-
+-        switch (drmmode->scrn->depth) {
+-        case 15:
+-            format = GBM_FORMAT_ARGB1555;
+-            break;
+-        case 16:
+-            format = GBM_FORMAT_RGB565;
+-            break;
+-        case 30:
+-            format = GBM_FORMAT_ARGB2101010;
+-            break;
+-        default:
+-            format = GBM_FORMAT_ARGB8888;
+-            break;
+-        }
++        uint32_t format = gbm_format_for_depth(drmmode->scrn->depth);
+ 
+ #ifdef GBM_BO_WITH_MODIFIERS
+         num_modifiers = get_modifiers_set(drmmode->scrn, format, &modifiers,
+@@ -1165,6 +1188,32 @@ drmmode_create_bo(drmmode_ptr drmmode, drmmode_bo *bo,
+     return bo->dumb != NULL;
+ }
+ 
++static Bool
++drmmode_create_cursor_bo(drmmode_ptr drmmode, drmmode_bo *bo,
++                         int width, int height)
++{
++    /* Assume whatever bpp we have for the primary plane, we also have for the cursor plane */
++    int bpp = drmmode->kbpp;
++
++    bo->width = width;
++    bo->height = height;
++
++#ifdef GLAMOR_HAS_GBM
++    uint32_t format = gbm_format_for_depth(bpp);
++
++    bo->gbm = gbm_bo_create(drmmode->gbm, bo->width, bo->height,
++                            format,
++                            GBM_BO_USE_CURSOR | GBM_BO_USE_WRITE);
++    if (bo->gbm) {
++        return TRUE;
++    }
++#endif
++
++    bo->dumb = dumb_bo_create(drmmode->fd, bo->width, bo->height, bpp);
++
++    return bo->dumb != NULL;
++}
++
+ Bool
+ drmmode_SetSlaveBO(PixmapPtr ppix,
+                    drmmode_ptr drmmode, int fd_handle, int pitch, int size)
+@@ -1797,7 +1846,7 @@ drmmode_set_cursor(xf86CrtcPtr crtc, int width, int height)
+ {
+     drmmode_crtc_private_ptr drmmode_crtc = crtc->driver_private;
+     drmmode_ptr drmmode = drmmode_crtc->drmmode;
+-    uint32_t handle = drmmode_crtc->cursor.bo->handle;
++    uint32_t handle = drmmode_bo_get_handle(&drmmode_crtc->cursor.cursor_bo);
+     CursorPtr cursor = xf86CurrentCursor(crtc->scrn->pScreen);
+     int ret = -EINVAL;
+ 
+@@ -1848,15 +1897,16 @@ drmmode_cursor_get_pitch(drmmode_crtc_private_ptr drmmode_crtc, int idx)
+         if (!drmmode_crtc->cursor_pitches) {
+             /* we couldn't allocate memory for the cache, so we don't cache the result */
+             int ret;
+-            struct dumb_bo *bo = dumb_bo_create(drmmode->fd, width, height, drmmode->kbpp);
+-            if (!bo) {
++
++            drmmode_bo bo = {0};
++            if (!drmmode_create_cursor_bo(drmmode, &bo, width, height)) {
+                 /* We couldn't allocate a bo, so we try to guess the pitch */
+                 return width > 64 ? width : 64;
+             }
+ 
+-            ret = bo->pitch / drmmode->cpp;
++            ret = drmmode_bo_get_pitch(&bo) / drmmode->cpp;
+ 
+-            dumb_bo_destroy(drmmode->fd, bo);
++            drmmode_bo_destroy(drmmode, &bo);
+             return ret;
+         }
+     }
+@@ -1866,16 +1916,16 @@ drmmode_cursor_get_pitch(drmmode_crtc_private_ptr drmmode_crtc, int idx)
+         return drmmode_crtc->cursor_pitches[idx];
+     }
+ 
+-    struct dumb_bo *bo = dumb_bo_create(drmmode->fd, width, height, drmmode->kbpp);
+-    if (!bo) {
++    drmmode_bo bo = {0};
++    if (!drmmode_create_cursor_bo(drmmode, &bo, width, height)) {
+         /* We couldn't allocate a bo, so we try to guess the pitch */
+         return width > 64 ? width : 64;
+     }
+ 
+-    drmmode_crtc->cursor_pitches[idx] = bo->pitch / drmmode->cpp;
++    drmmode_crtc->cursor_pitches[idx] = drmmode_bo_get_pitch(&bo) / drmmode->cpp;
+ 
+-    dumb_bo_destroy(drmmode->fd, bo);
+-    return drmmode_crtc->cursor_pitches[idx];
++    drmmode_bo_destroy(drmmode, &bo);
++    return *ret;
+ }
+ 
+ static void
+@@ -1920,15 +1970,14 @@ static Bool
+ drmmode_load_cursor_argb_check(xf86CrtcPtr crtc, CARD32 *image)
+ {
+     drmmode_crtc_private_ptr drmmode_crtc = crtc->driver_private;
+-    modesettingPtr ms = modesettingPTR(crtc->scrn);
+     CursorPtr cursor = xf86CurrentCursor(crtc->scrn->pScreen);
+     drmmode_cursor_rec drmmode_cursor = drmmode_crtc->cursor;
+     int width, height, i;
+     int max_width, max_height;
+ 
+     /* We need to know what our limit is for HW cursors.*/
+-    max_width  = ms->cursor_image_width;
+-    max_height = ms->cursor_image_height;
++    max_width  = drmmode_cursor.cursor_bo.width;
++    max_height = drmmode_cursor.cursor_bo.height;
+ 
+     if (drmmode_crtc->cursor_up) {
+         /* we probe the cursor so late, because we want to make sure that
+@@ -1965,7 +2014,7 @@ drmmode_load_cursor_argb_check(xf86CrtcPtr crtc, CARD32 *image)
+     const int cursor_pitch = drmmode_cursor_get_pitch(drmmode_crtc, i);
+ 
+     /* cursor should be mapped already */
+-    drmmode_paint_cursor(drmmode_cursor.bo->ptr, cursor_pitch, width, height,
++    drmmode_paint_cursor(drmmode_cursor.cursor_bo.map, cursor_pitch, width, height,
+                          image, max_width, max_height,
+                          drmmode_crtc, cursor->bits->width, cursor->bits->height);
+ 
+@@ -2283,7 +2332,7 @@ drmmode_shadow_fb_create(xf86CrtcPtr crtc, void *data, int width, int height,
+         return NULL;
+     }
+ 
+-    pPixData = drmmode_bo_map(drmmode, bo);
++    pPixData = drmmode_bo_map(drmmode, bo, FALSE);
+     pitch = drmmode_bo_get_pitch(bo);
+ 
+     pixmap = drmmode_create_pixmap_header(scrn->pScreen,
+@@ -4709,7 +4758,7 @@ drmmode_reset_cursor(drmmode_crtc_private_ptr drmmode_crtc)
+ static void drmmode_probe_cursor_size(xf86CrtcPtr crtc)
+ {
+     drmmode_crtc_private_ptr drmmode_crtc = crtc->driver_private;
+-    uint32_t handle = drmmode_crtc->cursor.bo->handle;
++    uint32_t handle = drmmode_bo_get_handle(&drmmode_crtc->cursor.cursor_bo);
+     drmmode_ptr drmmode = drmmode_crtc->drmmode;
+     drmmode_cursor_ptr drmmode_cursor = &drmmode_crtc->cursor;
+     int width, height, size;
+@@ -4806,14 +4855,22 @@ drmmode_create_initial_bos(ScrnInfoPtr pScrn, drmmode_ptr drmmode)
+         return FALSE;
+     pScrn->displayWidth = drmmode_bo_get_pitch(&drmmode->front_bo) / cpp;
+ 
+-    bpp = 32;
+-
+     drmmode_get_smallest_supported_cursor(pScrn, &ms->cursor_image_width, &ms->cursor_image_height);
+ 
++    Bool ret = TRUE;
++
+     for (i = 0; i < xf86_config->num_crtc; i++) {
+         xf86CrtcPtr crtc = xf86_config->crtc[i];
+         drmmode_crtc_private_ptr drmmode_crtc = crtc->driver_private;
+-        drmmode_crtc->cursor.bo = dumb_bo_create(drmmode->fd, ms->cursor_image_width, ms->cursor_image_height, bpp);
++        drmmode_bo *bo = &drmmode_crtc->cursor.cursor_bo;
++        if (!drmmode_create_cursor_bo(drmmode_crtc->drmmode, bo, ms->cursor_image_width, ms->cursor_image_height)) {
++            ret = FALSE;
++        }
++    }
++
++    if (!ret) {
++        xf86DrvMsg(drmmode->scrn->scrnIndex, X_WARNING,
++                   "Could not allocate cursor bo's\n");
+     }
+ 
+     return TRUE;
+@@ -4822,7 +4879,7 @@ drmmode_create_initial_bos(ScrnInfoPtr pScrn, drmmode_ptr drmmode)
+ void *
+ drmmode_map_front_bo(drmmode_ptr drmmode)
+ {
+-    return drmmode_bo_map(drmmode, &drmmode->front_bo);
++    return drmmode_bo_map(drmmode, &drmmode->front_bo, FALSE);
+ }
+ 
+ void *
+@@ -4844,15 +4901,15 @@ Bool
+ drmmode_map_cursor_bos(ScrnInfoPtr pScrn, drmmode_ptr drmmode)
+ {
+     xf86CrtcConfigPtr xf86_config = XF86_CRTC_CONFIG_PTR(pScrn);
+-    int i, ret;
++    int i;
+ 
+     for (i = 0; i < xf86_config->num_crtc; i++) {
+         xf86CrtcPtr crtc = xf86_config->crtc[i];
+         drmmode_crtc_private_ptr drmmode_crtc = crtc->driver_private;
+ 
+-        ret = dumb_bo_map(drmmode->fd, drmmode_crtc->cursor.bo);
+-        if (ret)
++        if (!drmmode_bo_map(drmmode_crtc->drmmode, &drmmode_crtc->cursor.cursor_bo, TRUE)) {
+             return FALSE;
++        }
+     }
+     return TRUE;
+ }
+@@ -4874,7 +4931,7 @@ drmmode_free_bos(ScrnInfoPtr pScrn, drmmode_ptr drmmode)
+         xf86CrtcPtr crtc = xf86_config->crtc[i];
+         drmmode_crtc_private_ptr drmmode_crtc = crtc->driver_private;
+ 
+-        dumb_bo_destroy(drmmode->fd, drmmode_crtc->cursor.bo);
++        drmmode_bo_destroy(drmmode, &drmmode_crtc->cursor.cursor_bo);
+         drmmode_destroy_tearfree_shadow(crtc);
+     }
+ }
+diff --git a/hw/xfree86/drivers/video/modesetting/drmmode_display.h b/hw/xfree86/drivers/video/modesetting/drmmode_display.h
+index 4f7086db3c..64a5c265de 100644
+--- a/hw/xfree86/drivers/video/modesetting/drmmode_display.h
++++ b/hw/xfree86/drivers/video/modesetting/drmmode_display.h
+@@ -83,6 +83,7 @@ typedef struct {
+ #ifdef GLAMOR_HAS_GBM
+     Bool used_modifiers;
+     struct gbm_bo *gbm;
++    void* map;
+ #endif
+ } drmmode_bo;
+ 
+@@ -193,7 +194,7 @@ typedef struct {
+ 
+     /* Sorted from smallest to largest. */
+     drmmode_cursor_dim_rec* dimensions;
+-    struct dumb_bo *bo;
++    drmmode_bo cursor_bo;
+ } drmmode_cursor_rec, *drmmode_cursor_ptr;
+ 
+ typedef struct {
+@@ -314,7 +315,7 @@ Bool drmmode_is_format_supported(ScrnInfoPtr scrn, uint32_t format,
+                                  uint64_t modifier);
+ int drmmode_bo_import(drmmode_ptr drmmode, drmmode_bo *bo,
+                       uint32_t *fb_id);
+-int drmmode_bo_destroy(drmmode_ptr drmmode, drmmode_bo *bo);
++void drmmode_bo_destroy(drmmode_ptr drmmode, drmmode_bo *bo);
+ uint32_t drmmode_bo_get_pitch(drmmode_bo *bo);
+ uint32_t drmmode_bo_get_handle(drmmode_bo *bo);
+ Bool drmmode_glamor_handle_new_screen_pixmap(drmmode_ptr drmmode);
+
+From ba22b4062299bf921ce41c559189342fc67fee2d Mon Sep 17 00:00:00 2001
+From: stefan11111 <stefan11111@shitposting.expert>
+Date: Fri, 22 Aug 2025 20:30:15 +0300
+Subject: [PATCH 6/6] modesetting: always try to map gbm bo's when requested
+
+Signed-off-by: stefan11111 <stefan11111@shitposting.expert>
+---
+ .../video/modesetting/drmmode_display.c       | 25 +++++++++----------
+ 1 file changed, 12 insertions(+), 13 deletions(-)
+
+diff --git a/hw/xfree86/drivers/video/modesetting/drmmode_display.c b/hw/xfree86/drivers/video/modesetting/drmmode_display.c
+index 7fe982143f..0216285cce 100644
+--- a/hw/xfree86/drivers/video/modesetting/drmmode_display.c
++++ b/hw/xfree86/drivers/video/modesetting/drmmode_display.c
+@@ -1042,7 +1042,7 @@ drmmode_bo_get_handle(drmmode_bo *bo)
+ }
+ 
+ static void *
+-drmmode_bo_map(drmmode_ptr drmmode, drmmode_bo *bo, Bool map_glamor)
++drmmode_bo_map(drmmode_ptr drmmode, drmmode_bo *bo)
+ {
+     int ret;
+ 
+@@ -1051,9 +1051,6 @@ drmmode_bo_map(drmmode_ptr drmmode, drmmode_bo *bo, Bool map_glamor)
+ 
+ #ifdef GLAMOR_HAS_GBM
+     if (bo->gbm) {
+-        if (!map_glamor) {
+-            return FALSE;
+-        }
+         void *map_data = NULL;
+         uint32_t stride = 0;
+ 
+@@ -1199,13 +1196,15 @@ drmmode_create_cursor_bo(drmmode_ptr drmmode, drmmode_bo *bo,
+     bo->height = height;
+ 
+ #ifdef GLAMOR_HAS_GBM
+-    uint32_t format = gbm_format_for_depth(bpp);
++    if (drmmode->gbm) {
++        uint32_t format = gbm_format_for_depth(bpp);
+ 
+-    bo->gbm = gbm_bo_create(drmmode->gbm, bo->width, bo->height,
+-                            format,
+-                            GBM_BO_USE_CURSOR | GBM_BO_USE_WRITE);
+-    if (bo->gbm) {
+-        return TRUE;
++        bo->gbm = gbm_bo_create(drmmode->gbm, bo->width, bo->height,
++                                format,
++                                GBM_BO_USE_CURSOR | GBM_BO_USE_WRITE);
++        if (bo->gbm) {
++            return TRUE;
++        }
+     }
+ #endif
+ 
+@@ -2332,7 +2331,7 @@ drmmode_shadow_fb_create(xf86CrtcPtr crtc, void *data, int width, int height,
+         return NULL;
+     }
+ 
+-    pPixData = drmmode_bo_map(drmmode, bo, FALSE);
++    pPixData = drmmode_bo_map(drmmode, bo);
+     pitch = drmmode_bo_get_pitch(bo);
+ 
+     pixmap = drmmode_create_pixmap_header(scrn->pScreen,
+@@ -4879,7 +4878,7 @@ drmmode_create_initial_bos(ScrnInfoPtr pScrn, drmmode_ptr drmmode)
+ void *
+ drmmode_map_front_bo(drmmode_ptr drmmode)
+ {
+-    return drmmode_bo_map(drmmode, &drmmode->front_bo, FALSE);
++    return drmmode_bo_map(drmmode, &drmmode->front_bo);
+ }
+ 
+ void *
+@@ -4907,7 +4906,7 @@ drmmode_map_cursor_bos(ScrnInfoPtr pScrn, drmmode_ptr drmmode)
+         xf86CrtcPtr crtc = xf86_config->crtc[i];
+         drmmode_crtc_private_ptr drmmode_crtc = crtc->driver_private;
+ 
+-        if (!drmmode_bo_map(drmmode_crtc->drmmode, &drmmode_crtc->cursor.cursor_bo, TRUE)) {
++        if (!drmmode_bo_map(drmmode_crtc->drmmode, &drmmode_crtc->cursor.cursor_bo)) {
+             return FALSE;
+         }
+     }
