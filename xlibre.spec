@@ -33,7 +33,7 @@
 
 Name:		xlibre
 Version:	25.0.0.12%{?git:~%{git}}
-Release:	1
+Release:	2
 Summary:	X11 server
 Group:		System/X11
 License:	GPLv2+ and MIT
@@ -103,6 +103,8 @@ Patch4001:	1001-do-not-crash-if-xv-not-initialized.patch
 # (cg) Point the user at the journal rather than a logfile at /dev/null
 Patch5001:	point-user-at-journal-rather-than-dev-null.patch
 Patch5002:	xorg-server-1.20.2-bug95301.patch
+
+Patch5003:	https://patch-diff.githubusercontent.com/raw/X11Libre/xserver/pull/734.patch
 
 Requires:	%{name}-xorg
 Obsoletes:	%{name}-xdmx < %{version}-%{release}
