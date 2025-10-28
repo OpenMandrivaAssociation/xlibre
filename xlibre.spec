@@ -8,8 +8,8 @@
 # Error compiling '/builddir/build/BUILDROOT/x11-server-1.20.0-1.x86_64/usr/share/x11-server-source/config/fdi2iclass.py'...
 #  File "/fdi2iclass.py", line 169
 #    print 'Section "InputClass"'
-%define _python_bytecompile_build 0
-%define _python_bytecompile_errors_terminate_build 0
+#define _python_bytecompile_build 0
+#define _python_bytecompile_errors_terminate_build 0
 
 # Do magic with .rpmsave named links
 %define pre_post_trans 1
@@ -20,8 +20,7 @@
 # Alternatives priority for standard libglx.so and mesa libs
 %define priority 500
 
-# ABI versions.  Have to keep these manually in sync with the source
-# because rpm is a terrible language.  HTFU.
+# ABI versions.
 %define ansic_major 1
 %define ansic_minor 4
 %define videodrv_major 28
@@ -32,7 +31,7 @@
 %define extension_minor 0
 
 Name:		xlibre
-Version:	25.0.0.12%{?git:~%{git}}
+Version:	25.0.0.13%{?git:~%{git}}
 Release:	1
 Summary:	X11 server
 Group:		System/X11
