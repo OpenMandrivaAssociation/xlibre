@@ -32,7 +32,7 @@
 
 Name:		xlibre
 Version:	25.0.0.13%{?git:~%{git}}
-Release:	1
+Release:	2
 Summary:	X11 server
 Group:		System/X11
 License:	GPLv2+ and MIT
@@ -93,6 +93,9 @@ Patch911:	xorg-server-1.16.0-blacklist-driver.patch
 #      an annoying sound) IF the hotkey is enabled. If the user chooses to
 #      enable ctrk+alt+bksp, why force him to hit twice? OTOH, the sound is
 #      annoying, and it should teach users to not use ctrl+alt+bksp =D
+
+# Backports from master/upstream pull requests
+Patch1000:	https://github.com/X11Libre/xserver/pull/691.patch
 
 # Do not crash if Xv is not initialized (patch from xorg-devel ML)
 # The crash happened when v4l was loaded and xv was not registered,
