@@ -32,7 +32,7 @@
 
 Name:		xlibre
 Version:	25.0.0.14%{?git:~%{git}}
-Release:	2
+Release:	3
 Summary:	X11 server
 Group:		System/X11
 License:	GPLv2+ and MIT
@@ -183,6 +183,22 @@ BuildRequires:	hostname
 Provides:	x11-server = %{EVRD}
 
 %rename x11-server-xorg
+
+# This is not fully right, but we need to get rid of the insane
+# "Let's require all drivers" packages *somewhere*...
+Obsoletes:	x11-driver-input <= 1.0.0-36
+Obsoletes:	x11-driver-video <= 1.0.0-65
+
+# Also not quite right, but those are drivers for prehistoric GPUs
+# that haven't been ported to XLibre and probably never will, given
+# the hardware hasn't been around for ages
+Obsoletes:	x11-driver-video-cirrus <= 1.6.0-1
+Obsoletes:	x11-driver-video-neomagic <= 1.3.1-1
+Obsoletes:	x11-driver-video-openchrome <= 0.6.0-4
+Obsoletes:	x11-driver-video-sis <= 0.12.0-3
+# This hardware still exists, but the driver doesn't and the hardware
+# SHOULD be compatible with libinput
+Obsoletes:	x11-driver-input-wacom <= 1.0.0-2
 
 %description
 X11 server
