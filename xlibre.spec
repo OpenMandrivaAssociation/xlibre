@@ -31,7 +31,7 @@
 %define extension_minor 0
 
 Name:		xlibre
-Version:	25.0.0.14%{?git:~%{git}}
+Version:	25.0.0.15%{?git:~%{git}}
 Release:	3
 Summary:	X11 server
 Group:		System/X11
