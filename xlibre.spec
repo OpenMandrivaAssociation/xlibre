@@ -83,7 +83,7 @@ Patch903:	0903-LED-behavior-fixes.patch
 #Patch906:	0906-xfree86-need-to-press-Ctrl-Alt-Bksp-twice-to-termina.patch
 #Patch907:	0907-Add-nr-argument-for-backwards-compatibility.patch
 #Patch910:	xorg-1.13.0-link-tirpc.patch
-Patch911:	xorg-server-1.16.0-blacklist-driver.patch
+#Patch911:	xorg-server-1.16.0-blacklist-driver.patch
 
 # Candidates for dropping:
 # 902: by pixel, so that X11 choose the best resolution with a better algorithm
