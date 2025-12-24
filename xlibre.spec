@@ -104,7 +104,7 @@ Patch4001:	1001-do-not-crash-if-xv-not-initialized.patch
 
 # (cg) Point the user at the journal rather than a logfile at /dev/null
 #Patch5001:	point-user-at-journal-rather-than-dev-null.patch
-Patch5002:	xorg-server-1.20.2-bug95301.patch
+#Patch5002:	xorg-server-1.20.2-bug95301.patch
 
 Requires:	%{name}-xorg
 Obsoletes:	%{name}-xdmx < %{version}-%{release}
