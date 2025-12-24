@@ -95,7 +95,7 @@ Patch903:	0903-LED-behavior-fixes.patch
 #      annoying, and it should teach users to not use ctrl+alt+bksp =D
 
 # Backports from master/upstream pull requests
-Patch1000:	https://github.com/X11Libre/xserver/pull/691.patch
+#Patch1000:	https://github.com/X11Libre/xserver/pull/691.patch
 
 # Do not crash if Xv is not initialized (patch from xorg-devel ML)
 # The crash happened when v4l was loaded and xv was not registered,
