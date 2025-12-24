@@ -81,7 +81,7 @@ Patch901:	0901-Don-t-print-information-about-X-Server-being-a-pre-r.patch
 Patch902:	0902-Take-width-into-account-when-choosing-default-mode.patch
 Patch903:	0903-LED-behavior-fixes.patch
 #Patch906:	0906-xfree86-need-to-press-Ctrl-Alt-Bksp-twice-to-termina.patch
-Patch907:	0907-Add-nr-argument-for-backwards-compatibility.patch
+#Patch907:	0907-Add-nr-argument-for-backwards-compatibility.patch
 #Patch910:	xorg-1.13.0-link-tirpc.patch
 Patch911:	xorg-server-1.16.0-blacklist-driver.patch
 
