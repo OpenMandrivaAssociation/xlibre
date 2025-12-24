@@ -61,7 +61,7 @@ Patch102:	xorg-server-1.20.5-fix-meson-xkb_output_dir.patch
 # From Debian use intel ddx driver only for gen4 and older chipsets
 Patch7022:	06_use-intel-only-on-pre-gen4.diff
 # Default to xf86-video-modesetting on GeForce 8 and newer
-Patch7023:	0001-xfree86-use-modesetting-driver-by-default-on-GeForce.patch
+#Patch7023:	0001-xfree86-use-modesetting-driver-by-default-on-GeForce.patch
 # Default to va_gl on intel i965 as we use the modesetting drv there
 # va_gl should probably just be the default everywhere ?
 # (tpg) 2020-01-17 not needed anymore ?
