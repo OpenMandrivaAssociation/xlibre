@@ -31,12 +31,12 @@
 %define extension_minor 0
 
 Name:		xlibre
-Version:	25.0.0.16%{?git:~%{git}}
+Version:	25.1.0%{?git:~%{git}}
 Release:	1
 Summary:	X11 server
 Group:		System/X11
 License:	GPLv2+ and MIT
-URL:		https://xorg.freedesktop.org
+URL:		https://github.com/X11Libre/xserver
 %if 0%{?git:1}
 Source0:	https://github.com/X11Libre/xserver/archive/refs/heads/master.tar.gz#/xlibre-%{git}.tar.gz
 %else
@@ -61,7 +61,7 @@ Patch102:	xorg-server-1.20.5-fix-meson-xkb_output_dir.patch
 # From Debian use intel ddx driver only for gen4 and older chipsets
 Patch7022:	06_use-intel-only-on-pre-gen4.diff
 # Default to xf86-video-modesetting on GeForce 8 and newer
-Patch7023:	0001-xfree86-use-modesetting-driver-by-default-on-GeForce.patch
+##Patch7023:	0001-xfree86-use-modesetting-driver-by-default-on-GeForce.patch
 # Default to va_gl on intel i965 as we use the modesetting drv there
 # va_gl should probably just be the default everywhere ?
 # (tpg) 2020-01-17 not needed anymore ?
@@ -81,9 +81,9 @@ Patch901:	0901-Don-t-print-information-about-X-Server-being-a-pre-r.patch
 Patch902:	0902-Take-width-into-account-when-choosing-default-mode.patch
 Patch903:	0903-LED-behavior-fixes.patch
 #Patch906:	0906-xfree86-need-to-press-Ctrl-Alt-Bksp-twice-to-termina.patch
-Patch907:	0907-Add-nr-argument-for-backwards-compatibility.patch
+##Patch907:	0907-Add-nr-argument-for-backwards-compatibility.patch
 #Patch910:	xorg-1.13.0-link-tirpc.patch
-Patch911:	xorg-server-1.16.0-blacklist-driver.patch
+#Patch911:	xorg-server-1.16.0-blacklist-driver.patch
 
 # Candidates for dropping:
 # 902: by pixel, so that X11 choose the best resolution with a better algorithm
@@ -95,7 +95,7 @@ Patch911:	xorg-server-1.16.0-blacklist-driver.patch
 #      annoying, and it should teach users to not use ctrl+alt+bksp =D
 
 # Backports from master/upstream pull requests
-Patch1000:	https://github.com/X11Libre/xserver/pull/691.patch
+##Patch1000:	https://github.com/X11Libre/xserver/pull/691.patch
 
 # Do not crash if Xv is not initialized (patch from xorg-devel ML)
 # The crash happened when v4l was loaded and xv was not registered,
@@ -103,8 +103,8 @@ Patch1000:	https://github.com/X11Libre/xserver/pull/691.patch
 Patch4001:	1001-do-not-crash-if-xv-not-initialized.patch
 
 # (cg) Point the user at the journal rather than a logfile at /dev/null
-Patch5001:	point-user-at-journal-rather-than-dev-null.patch
-Patch5002:	xorg-server-1.20.2-bug95301.patch
+##Patch5001:	point-user-at-journal-rather-than-dev-null.patch
+##Patch5002:	xorg-server-1.20.2-bug95301.patch
 
 Requires:	%{name}-xorg
 Obsoletes:	%{name}-xdmx < %{version}-%{release}
@@ -234,6 +234,7 @@ fi
 %{_bindir}/xserver-sdk-abi-requires
 %{_includedir}/xorg/*.h
 %{_libdir}/pkgconfig/xorg-server.pc
+%{_libdir}/pkgconfig/xlibre-server.pc
 %{_datadir}/aclocal/xorg-server.m4
 
 #------------------------------------------------------------------------------
@@ -320,6 +321,7 @@ x11-server-xorg is the new generation of X server from X.Org.
 %doc %{_mandir}/man5/Xwrapper.config.*
 %{_datadir}/X11/xorg.conf.d/10-quirks.conf
 %{_datadir}/X11/xorg.conf.d/00-modules.conf
+%{_datadir}/X11/xorg.conf.d/10-nvidia.conf
 #------------------------------------------------------------------------------
 
 %package xnest
@@ -441,10 +443,25 @@ getminor() {
    tr '(),' '   ' | awk '{ print $5 }'
 }
 
+# Upstream inserted almost identical defines for ABI_VIDEODRV_VERSION behind a conditional-
+# for a future ABI change:
+# https://github.com/X11Libre/xserver/blob/8a9a14a518e8f9517d42db8f4d1f3c9ccdf6602e/hw/xfree86/common/xf86Module.h#L78-L84
+# Having two identical defines (with different values) breaks the getminor / getmajor
+# functions used for our ABI tests.
+# Use the below functions to tail to the second conditional define for ABI_VIDEODRV_VERSION.
+getmajorvideodrv() {
+   grep -i ^#define.ABI.$1_VERSION hw/xfree86/common/xf86Module.h |
+   tail -n +2 | tr '(),' '   ' | awk '{ print $4 }'
+}
+getminorvideodrv() {
+   grep -i ^#define.ABI.$1_VERSION hw/xfree86/common/xf86Module.h |
+   tail -n +2 | tr '(),' '   ' | awk '{ print $5 }'
+}
+
 test $(getmajor ansic) == %{ansic_major}
 test $(getminor ansic) == %{ansic_minor}
-test $(getmajor videodrv) == %{videodrv_major}
-test $(getminor videodrv) == %{videodrv_minor}
+test $(getmajorvideodrv videodrv) == %{videodrv_major}
+test $(getminorvideodrv videodrv) == %{videodrv_minor}
 test $(getmajor xinput) == %{xinput_major}
 test $(getminor xinput) == %{xinput_minor}
 test $(getmajor extension) == %{extension_major}
@@ -454,11 +471,6 @@ test $(getminor extension) == %{extension_minor}
 %meson \
 	-Dlog_dir="%{_logdir}" \
 	-Dmodule_dir="%{_libdir}/xorg/modules" \
-	-Dvendor_name="%{vendor}" \
-	-Dvendor_name_short="%{disttag}" \
-	-Dvendor_web="%{disturl}" \
-	-Dbuilder_addr="%{disturl}" \
-	-Dbuilder_string="Build ID: %{name} %{version}-%{release}" \
 	-Dxorg=true \
 	-Dsuid_wrapper=true \
 	-Dxephyr=true \
@@ -469,7 +481,6 @@ test $(getminor extension) == %{extension_minor}
 	%else
 	-Dint10=x86emu \
 	%endif
-	-Dvendor_web="%{bugurl}" \
 	-Ddefault_font_path="catalogue:%{_sysconfdir}/X11/fontpath.d,built-ins"
 
 %meson_build
