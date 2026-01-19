@@ -32,7 +32,7 @@
 
 Name:		xlibre
 Version:	25.1.0%{?git:~%{git}}
-Release:	1
+Release:	2
 Summary:	X11 server
 Group:		System/X11
 License:	GPLv2+ and MIT
@@ -54,7 +54,7 @@ Source8:	50-synaptics.conf
 Source30:	xserver-sdk-abi-requires
 Source100:	x11-server.rpmlintrc
 
-Patch100:	xorg-server-1.20.4-det_mon-size.patch
+##Patch100:	xorg-server-1.20.4-det_mon-size.patch
 Patch102:	xorg-server-1.20.5-fix-meson-xkb_output_dir.patch
 
 # Fedora Patches
@@ -83,7 +83,7 @@ Patch903:	0903-LED-behavior-fixes.patch
 #Patch906:	0906-xfree86-need-to-press-Ctrl-Alt-Bksp-twice-to-termina.patch
 ##Patch907:	0907-Add-nr-argument-for-backwards-compatibility.patch
 #Patch910:	xorg-1.13.0-link-tirpc.patch
-#Patch911:	xorg-server-1.16.0-blacklist-driver.patch
+##Patch911:	xorg-server-1.16.0-blacklist-driver.patch
 
 # Candidates for dropping:
 # 902: by pixel, so that X11 choose the best resolution with a better algorithm
@@ -105,6 +105,10 @@ Patch4001:	1001-do-not-crash-if-xv-not-initialized.patch
 # (cg) Point the user at the journal rather than a logfile at /dev/null
 ##Patch5001:	point-user-at-journal-rather-than-dev-null.patch
 ##Patch5002:	xorg-server-1.20.2-bug95301.patch
+
+# Revert these changes as they specify identical duplicated defines behind a (to be removed) conditional which break our ABI tests :
+# https://github.com/X11Libre/xserver/blob/8a9a14a518e8f9517d42db8f4d1f3c9ccdf6602e/hw/xfree86/common/xf86Module.h#L78-L84
+Patch6000: xserver-xlibre-xserver-25.1.0-fix-abi-tests.patch
 
 Requires:	%{name}-xorg
 Obsoletes:	%{name}-xdmx < %{version}-%{release}
@@ -443,25 +447,10 @@ getminor() {
    tr '(),' '   ' | awk '{ print $5 }'
 }
 
-# Upstream inserted almost identical defines for ABI_VIDEODRV_VERSION behind a conditional-
-# for a future ABI change:
-# https://github.com/X11Libre/xserver/blob/8a9a14a518e8f9517d42db8f4d1f3c9ccdf6602e/hw/xfree86/common/xf86Module.h#L78-L84
-# Having two identical defines (with different values) breaks the getminor / getmajor
-# functions used for our ABI tests.
-# Use the below functions to tail to the second conditional define for ABI_VIDEODRV_VERSION.
-getmajorvideodrv() {
-   grep -i ^#define.ABI.$1_VERSION hw/xfree86/common/xf86Module.h |
-   tail -n +2 | tr '(),' '   ' | awk '{ print $4 }'
-}
-getminorvideodrv() {
-   grep -i ^#define.ABI.$1_VERSION hw/xfree86/common/xf86Module.h |
-   tail -n +2 | tr '(),' '   ' | awk '{ print $5 }'
-}
-
 test $(getmajor ansic) == %{ansic_major}
 test $(getminor ansic) == %{ansic_minor}
-test $(getmajorvideodrv videodrv) == %{videodrv_major}
-test $(getminorvideodrv videodrv) == %{videodrv_minor}
+test $(getmajor videodrv) == %{videodrv_major}
+test $(getminor videodrv) == %{videodrv_minor}
 test $(getmajor xinput) == %{xinput_major}
 test $(getminor xinput) == %{xinput_minor}
 test $(getmajor extension) == %{extension_major}
