@@ -31,7 +31,7 @@
 %define extension_minor 0
 
 Name:		xlibre
-Version:	25.1.5%{?git:~%{git}}
+Version:	25.1.6%{?git:~%{git}}
 Release:	1
 Summary:	X11 server
 Group:		System/X11
@@ -282,9 +282,12 @@ X server common files.
 # Intentionally not noreplace, so we can get rid of needs_root_rights
 # when the display managers make progress
 %config %{_sysconfdir}/X11/Xwrapper.config
+%config %{_datadir}/X11/xorg.conf.d/10-nvidia-modules.conf
+
 %{_bindir}/gtf
 %{_libdir}/xorg/modules/*
 %{_libdir}/xorg/protocol.txt
+%doc %{_sysconfdir}/X11/xorg.conf.d/10-nvidia*
 %doc %{_mandir}/man1/gtf.*
 %doc %{_mandir}/man4/fbdevhw.*
 %doc %{_mandir}/man4/exa.*
