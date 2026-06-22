@@ -1,6 +1,6 @@
-diff -urN xserver-xlibre-xserver-25.1.0/hw/xfree86/common/xf86Module.h xserver-xlibre-xserver-25.1.0-fix-abi-tests/hw/xfree86/common/xf86Module.h
---- xserver-xlibre-xserver-25.1.0/hw/xfree86/common/xf86Module.h	2025-12-21 14:53:30.000000000 +0000
-+++ xserver-xlibre-xserver-25.1.0-fix-abi-tests/hw/xfree86/common/xf86Module.h	2026-01-11 19:53:09.680526837 +0000
+diff -urN xserver-xlibre-xserver-25.1.0/include/xf86Module.h xserver-xlibre-xserver-25.1.0-fix-abi-tests/include/xf86Module.h
+--- xserver-xlibre-xserver-25.1.0/include/xf86Module.h	2025-12-21 14:53:30.000000000 +0000
++++ xserver-xlibre-xserver-25.1.0-fix-abi-tests/include/xf86Module.h	2026-01-11 19:53:09.680526837 +0000
 @@ -74,14 +74,7 @@
   * mask is 0xFFFF0000.
   */

@@ -30,10 +30,10 @@ index 0ccf252..d530173 100644
      return;
  }
  
-diff --git a/xkb/xkb.c b/xkb/xkb.c
+diff --git a/Xext/xkeyboard/xkb.c b/Xext/xkeyboard/xkb.c
 index 9c66955..a77b5b4 100644
---- a/xkb/xkb.c
-+++ b/xkb/xkb.c
+--- a/Xext/xkeyboard/xkb.c
++++ b/Xext/xkeyboard/xkb.c
 @@ -5918,6 +5918,7 @@ ProcXkbGetKbdByName(ClientPtr client)
                  if (sli) {
                      sli->explicitState = old_sli->explicitState;

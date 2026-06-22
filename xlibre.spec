@@ -31,7 +31,7 @@
 %define extension_minor 0
 
 Name:		xlibre
-Version:	25.1.7%{?git:~%{git}}
+Version:	25.2.0%{?git:~%{git}}
 Release:	1
 Summary:	X11 server
 Group:		System/X11
@@ -58,8 +58,6 @@ Source100:	x11-server.rpmlintrc
 Patch102:	xorg-server-1.20.5-fix-meson-xkb_output_dir.patch
 
 # Fedora Patches
-# From Debian use intel ddx driver only for gen4 and older chipsets
-Patch7022:	06_use-intel-only-on-pre-gen4.diff
 # Default to xf86-video-modesetting on GeForce 8 and newer
 ##Patch7023:	0001-xfree86-use-modesetting-driver-by-default-on-GeForce.patch
 # Default to va_gl on intel i965 as we use the modesetting drv there
@@ -77,7 +75,6 @@ Patch7022:	06_use-intel-only-on-pre-gen4.diff
 # git format-patch --start-number 900 mdv-1.6.4-redhat..mdv-1.6.4-patches
 # 0900 is a potential replacement for hw/xfree86/xorg-wrapper.c
 #Patch900:	0900-Use-a-X-wrapper-that-uses-pam-and-consolehelper-to-g.patch
-Patch901:	0901-Don-t-print-information-about-X-Server-being-a-pre-r.patch
 Patch902:	0902-Take-width-into-account-when-choosing-default-mode.patch
 Patch903:	0903-LED-behavior-fixes.patch
 #Patch906:	0906-xfree86-need-to-press-Ctrl-Alt-Bksp-twice-to-termina.patch
@@ -441,12 +438,12 @@ Xserver source code needed to build unofficial servers, like Xvnc.
 
 # check the ABI in the source against what we expect.
 getmajor() {
-   grep -i ^#define.ABI.$1_VERSION hw/xfree86/common/xf86Module.h |
+   grep -i ^#define.ABI.$1_VERSION include/xf86Module.h |
    tr '(),' '   ' | awk '{ print $4 }'
 }
 
 getminor() {
-   grep -i ^#define.ABI.$1_VERSION hw/xfree86/common/xf86Module.h |
+   grep -i ^#define.ABI.$1_VERSION include/xf86Module.h |
    tr '(),' '   ' | awk '{ print $5 }'
 }
 
@@ -524,5 +521,8 @@ cat >%{buildroot}%{_sysconfdir}/X11/Xwrapper.config <<'EOF'
 allowed_users = console
 needs_root_rights = yes
 EOF
+
+# Kdrive doesn't exist, but its man page still gets installed
+rm %{buildroot}%{_mandir}/man1/Xkdrive.*
 
 %files
