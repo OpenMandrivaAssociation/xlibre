@@ -1,0 +1,13 @@
+diff -uraN xserver-xlibre-xserver-25.2.2/hw/xfree86/drivers/video/modesetting/drmmode_display.c omv-xserver-xlibre-xserver-25.2.2/hw/xfree86/drivers/video/modesetting/drmmode_display.c
+--- xserver-xlibre-xserver-25.2.2/hw/xfree86/drivers/video/modesetting/drmmode_display.c	2026-07-23 16:57:57.000000000 +0200
++++ omv-xserver-xlibre-xserver-25.2.2/hw/xfree86/drivers/video/modesetting/drmmode_display.c	2026-08-31 23:56:25.852642146 +0200
+@@ -1954,7 +1954,8 @@
+         return FALSE;
+     }
+ 
+-    const int cursor_pitch = drmmode_cursor_get_pitch(drmmode_crtc, idx);
++    const int kcpp = (drmmode_crtc->drmmode->kbpp + 7) / 8;
++    const int cursor_pitch = drmmode_cursor.bo->pitch / kcpp;
+ 
+     /* Get the resolution of the cursor. */
+     int cursor_width  = drmmode_cursor.dimensions[idx].width;

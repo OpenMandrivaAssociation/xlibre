@@ -32,7 +32,7 @@
 
 Name:		xlibre
 Version:	25.2.2%{?git:~%{git}}
-Release:	1
+Release:	2
 Summary:	X11 server
 Group:		System/X11
 License:	GPLv2+ and MIT
@@ -71,12 +71,13 @@ Patch102:	xorg-server-1.20.5-fix-meson-xkb_output_dir.patch
 #Patch7031:	0003-modesetting-Factor-out-drmmode_target_output.patch
 #Patch7032:	0004-modesetting-Use-atomic-instead-of-per-crtc-walks-whe.patch
 
-# OpenMandriva/Mageia patches
+# OpenMandriva
 # git format-patch --start-number 900 mdv-1.6.4-redhat..mdv-1.6.4-patches
 # 0900 is a potential replacement for hw/xfree86/xorg-wrapper.c
 #Patch900:	0900-Use-a-X-wrapper-that-uses-pam-and-consolehelper-to-g.patch
 Patch902:	0902-Take-width-into-account-when-choosing-default-mode.patch
 Patch903:	0903-LED-behavior-fixes.patch
+Patch904:	xlibre-25.2.2-fix-hw-cursor-for-modesettings.patch
 #Patch906:	0906-xfree86-need-to-press-Ctrl-Alt-Bksp-twice-to-termina.patch
 ##Patch907:	0907-Add-nr-argument-for-backwards-compatibility.patch
 #Patch910:	xorg-1.13.0-link-tirpc.patch
