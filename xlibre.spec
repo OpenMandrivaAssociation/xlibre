@@ -32,7 +32,7 @@
 
 Name:		xlibre
 Version:	25.2.2%{?git:~%{git}}
-Release:	1
+Release:	3
 Summary:	X11 server
 Group:		System/X11
 License:	GPLv2+ and MIT
