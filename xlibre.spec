@@ -32,7 +32,7 @@
 
 Name:		xlibre
 Version:	25.2.2%{?git:~%{git}}
-Release:	3
+Release:	4
 Summary:	X11 server
 Group:		System/X11
 License:	GPLv2+ and MIT
@@ -106,6 +106,9 @@ Patch4001:	1001-do-not-crash-if-xv-not-initialized.patch
 # Revert these changes as they specify identical duplicated defines behind a (to be removed) conditional which break our ABI tests :
 # https://github.com/X11Libre/xserver/blob/8a9a14a518e8f9517d42db8f4d1f3c9ccdf6602e/hw/xfree86/common/xf86Module.h#L78-L84
 Patch6000: xserver-xlibre-xserver-25.1.0-fix-abi-tests.patch
+# 25.2 lets modesetting add a second primary screen on the same DRM node after
+# amdgpu already has master (drmSetMaster EBUSY). A GPU cannot be claimed by two drivers.
+Patch6001:	xlibre-default-single-driver.patch
 
 Requires:	%{name}-xorg
 Obsoletes:	%{name}-xdmx < %{version}-%{release}

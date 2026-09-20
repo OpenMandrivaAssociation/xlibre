@@ -1,0 +1,49 @@
+From bf99b284afc1de59bcebbb585af45f98759397bd Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Bernhard=20Rosenkr=C3=A4nzer?= <bero@lindev.ch>
+Date: Sun, 20 Sep 2026 22:52:50 +0200
+Subject: [PATCH] xfree86: default SingleDriver to true
+
+XLibre 25.2 still autoconfigures modesetting/fbdev/vesa as fallbacks
+after a successful amdgpu (or other DDX) probe, then lets more than one
+driver add non-GPU screens. modesetting's old probe then opens the same
+KMS device, drmSetMaster fails with EBUSY, and the server exits.
+
+A given DRM node can only have one master. Secondary GPUs for offload
+still work: xf86BusConfig() only stops additional primary screens;
+platform GPU screens are added afterwards.
+
+Closes: https://github.com/OpenMandrivaAssociation/distribution/issues/3532
+---
+ hw/xfree86/common/xf86Globals.c | 2 +-
+ hw/xfree86/man/xorg.conf.man    | 2 +-
+ 2 files changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/hw/xfree86/common/xf86Globals.c b/hw/xfree86/common/xf86Globals.c
+index 336e089..ee58ce1 100644
+--- a/hw/xfree86/common/xf86Globals.c
++++ b/hw/xfree86/common/xf86Globals.c
+@@ -127,7 +127,7 @@ xf86InfoRec xf86Info = {
+     .autoAddGPU = FALSE,
+ #endif
+     .autoBindGPU = TRUE,
+-    .singleDriver = FALSE,
++    .singleDriver = TRUE,
+ };
+ 
+ const char *xf86ConfigFile = NULL;
+diff --git a/hw/xfree86/man/xorg.conf.man b/hw/xfree86/man/xorg.conf.man
+index 1d0d821..ca524dd 100644
+--- a/hw/xfree86/man/xorg.conf.man
++++ b/hw/xfree86/man/xorg.conf.man
+@@ -691,7 +691,7 @@ Allow clients with a different byte-order than the server. Disabled by default.
+ .BI "Option \*qSingleDriver\*q  \*q" boolean \*q
+ Only the first successfully probed driver is allowed to add screens to the current layout, others may
+ add secondary GPU screens only (e.g., if non-primary GPUs are used for offloading).
+-Disabled by default.
++Enabled by default.
+ .SH "MODULE SECTION"
+ The
+ .B Module
+-- 
+2.55.0
+
