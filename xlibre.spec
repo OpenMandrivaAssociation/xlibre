@@ -31,8 +31,8 @@
 %define extension_minor 0
 
 Name:		xlibre
-Version:	25.2.2%{?git:~%{git}}
-Release:	5
+Version:	25.2.3%{?git:~%{git}}
+Release:	1
 Summary:	X11 server
 Group:		System/X11
 License:	GPLv2+ and MIT
@@ -109,9 +109,6 @@ Patch6000: xserver-xlibre-xserver-25.1.0-fix-abi-tests.patch
 # 25.2 lets modesetting add a second primary screen on the same DRM node after
 # amdgpu already has master (drmSetMaster EBUSY). A GPU cannot be claimed by two drivers.
 Patch6001:	xlibre-default-single-driver.patch
-# CVE-2026-88812: _CheckSetDoodad frees the TextDoodad text and leaves the
-# pointer set, so XkbFreeGeometry frees it again. XLibre a0f5e66.
-Patch6002:	xlibre-25.2.2-cve-2026-88812.patch
 
 Requires:	%{name}-xorg
 Obsoletes:	%{name}-xdmx < %{version}-%{release}
